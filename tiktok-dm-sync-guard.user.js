@@ -193,41 +193,10 @@
     }
     return true;
   }
-  function patchTree(o, flags, depth) {
-    if (!o || typeof o !== "object" || depth > 5) return false;
-    let hit = false;
-    for (const k in o) {
-      if (k === "abTestVersion") hit = patchAb(o[k], flags) || hit;
-      else if (o[k] && typeof o[k] === "object") hit = patchTree(o[k], flags, depth + 1) || hit;
-    }
-    return hit;
-  }
   function installFlags() {
     const flags = wanted();
     if (!Object.keys(flags).length) return;
-    const origParse = JSON.parse;
-    JSON.parse = function(text, reviver) {
-      const out = origParse.call(this, text, reviver);
-      try {
-        if (typeof text === "string" && text.length > 5e3 && text.indexOf("abTestVersion") !== -1) patchTree(out, flags, 0);
-      } catch (e) {
-      }
-      return out;
-    };
-    const mo = new MutationObserver(() => {
-      const el = document.getElementById("__UNIVERSAL_DATA_FOR_REHYDRATION__");
-      if (!el || !el.textContent.length || el.__tkPatched) return;
-      el.__tkPatched = true;
-      try {
-        const data = origParse(el.textContent);
-        if (patchTree(data, flags, 0)) el.textContent = JSON.stringify(data);
-      } catch (e) {
-      }
-      mo.disconnect();
-    });
-    mo.observe(document.documentElement || document, { childList: true, subtree: true });
-    setTimeout(() => mo.disconnect(), 3e4);
-    setInterval(() => {
+    const patchLive = () => {
       try {
         let fiber = null;
         for (const el of document.querySelectorAll("body > *, #app, #app > *")) {
@@ -256,7 +225,12 @@
         }
       } catch (e) {
       }
-    }, 5e3);
+    };
+    let ready = false;
+    setInterval(() => {
+      if (!ready) ready = !!document.querySelector('[data-e2e="dm-new-conversation-nickname"], [data-e2e="dm-new-chat-nickname"]');
+      if (ready) patchLive();
+    }, 1500);
   }
 
   // src/features/codecSwap.js
@@ -727,7 +701,10 @@
       if (!g) groups.push(g = { name: s.group, items: [] });
       g.items.push(s);
     }
-    const close = () => overlay.remove();
+    const close = () => {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey, true);
+    };
     const file = h("input", { type: "file", accept: ".json,application/json", hidden: true });
     file.addEventListener("change", async () => {
       const f = file.files && file.files[0];
@@ -777,13 +754,18 @@
         file
       )
     );
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        close();
+      }
+    };
     const overlay = h("div", { class: "tkp-overlay", onclick: (e) => {
       if (e.target === overlay) close();
     } }, panel);
-    overlay.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") close();
-      e.stopPropagation();
-    });
+    overlay.addEventListener("keydown", (e) => e.stopPropagation());
+    document.addEventListener("keydown", onKey, true);
     document.body.appendChild(overlay);
   }
   function startPanel() {
