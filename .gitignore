@@ -3,3 +3,4 @@ apps/
 *.apkm
 *.ipa
 *.xapk
+node_modules/
