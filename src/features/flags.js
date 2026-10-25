@@ -33,32 +33,11 @@ export function installFlags() {
   const flags = wanted();
   if (!Object.keys(flags).length) return;
 
-  // 1) TikTok reads its page config with JSON.parse(textContent). Patch big parses that carry flags.
-  const origParse = JSON.parse;
-  JSON.parse = function (text, reviver) {
-    const out = origParse.call(this, text, reviver);
-    try {
-      if (typeof text === 'string' && text.length > 5000 && text.indexOf('abTestVersion') !== -1) patchTree(out, flags, 0);
-    } catch (e) {}
-    return out;
-  };
+  // Flags are flipped only after TikTok's message client has started. Flipping them in the page
+  // config before startup (v1.3/v1.4) made the client fail to load and the inbox hang.
+  // A chat opened after the flip gets the photo button and group chats.
 
-  // 2) Backup: rewrite the config tag as soon as the parser adds it.
-  const mo = new MutationObserver(() => {
-    const el = document.getElementById('__UNIVERSAL_DATA_FOR_REHYDRATION__');
-    if (!el || !el.textContent.length || el.__tkPatched) return;
-    el.__tkPatched = true;
-    try {
-      const data = origParse(el.textContent);
-      if (patchTree(data, flags, 0)) el.textContent = JSON.stringify(data);
-    } catch (e) {}
-    mo.disconnect();
-  });
-  mo.observe(document.documentElement || document, { childList: true, subtree: true });
-  setTimeout(() => mo.disconnect(), 30000);
-
-  // 3) Last resort: patch the live copy React holds.
-  setInterval(() => {
+  const patchLive = () => {
     try {
       let fiber = null;
       for (const el of document.querySelectorAll('body > *, #app, #app > *')) {
@@ -81,5 +60,11 @@ export function installFlags() {
         if (f.child) stack.push(f.child);
       }
     } catch (e) {}
-  }, 5000);
+  };
+  // Wait until a real conversation has rendered once (the message client is up), then flip.
+  let ready = false;
+  setInterval(() => {
+    if (!ready) ready = !!document.querySelector('[data-e2e="dm-new-conversation-nickname"], [data-e2e="dm-new-chat-nickname"]');
+    if (ready) patchLive();
+  }, 1500);
 }

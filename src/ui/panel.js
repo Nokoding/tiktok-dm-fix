@@ -92,7 +92,7 @@ function openPanel() {
     g.items.push(s);
   }
 
-  const close = () => overlay.remove();
+  const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey, true); };
   const file = h('input', { type: 'file', accept: '.json,application/json', hidden: true });
   file.addEventListener('change', async () => {
     const f = file.files && file.files[0];
@@ -117,8 +117,10 @@ function openPanel() {
       h('button', { class: 'tkp-btn tkp-primary', onclick: () => location.reload() }, 'Reload TikTok'),
       file));
 
+  const onKey = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } };
   const overlay = h('div', { class: 'tkp-overlay', onclick: e => { if (e.target === overlay) close(); } }, panel);
-  overlay.addEventListener('keydown', e => { if (e.key === 'Escape') close(); e.stopPropagation(); });
+  overlay.addEventListener('keydown', e => e.stopPropagation());
+  document.addEventListener('keydown', onKey, true);
   document.body.appendChild(overlay);
 }
 
