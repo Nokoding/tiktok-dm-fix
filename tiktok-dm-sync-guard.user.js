@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TikTok DM sync guard
 // @namespace    nokoding
-// @version      1.4.1
+// @version      1.4.2
 // @description  Replaces TikTok web's buggy DM box with a native one (Enter sends, no lost letters, no stuck messages) and turns on the photo/video sending and group chats TikTok already built into the web app.
 // @match        https://www.tiktok.com/*
 // @run-at       document-start
@@ -69,9 +69,12 @@
       }
     } catch (e) {}
   }
-  // First flip shortly after the message client has started, then keep it applied.
-  setTimeout(patchLive, 4000);
-  setInterval(patchLive, 5000);
+  // Wait until a real conversation has rendered once (the message client is up), then flip.
+  let flagsReady = false;
+  setInterval(() => {
+    if (!flagsReady) flagsReady = !!document.querySelector('[data-e2e="dm-new-conversation-nickname"], [data-e2e="dm-new-chat-nickname"]');
+    if (flagsReady) patchLive();
+  }, 1500);
 
   // ---- Part 1: our own message box ----
   // TikTok's box is a Draft.js editor that keeps a hidden copy of the text and lets the two drift
