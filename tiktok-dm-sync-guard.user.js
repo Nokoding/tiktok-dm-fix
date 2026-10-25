@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         TikTok DM sync guard
 // @namespace    nokoding
-// @version      1.1
-// @description  Keeps TikTok web's DM box and its internal text in sync, and makes Enter send on the messages page.
+// @version      1.2
+// @description  Keeps TikTok web's DM box and its internal text in sync, hides the stuck placeholder, and makes Enter send on the messages page.
 // @match        https://www.tiktok.com/*
 // @run-at       document-idle
 // @grant        none
@@ -12,12 +12,12 @@
 
 (function () {
   'use strict';
-  // New flag name on purpose, so this still runs if the old v1.0 copy is also installed.
-  if (window.__tkDmSyncGuard11) return;
-  window.__tkDmSyncGuard11 = true;
+  // New flag name on purpose, so this still runs if an older copy is also installed.
+  if (window.__tkDmSyncGuard12) return;
+  window.__tkDmSyncGuard12 = true;
 
   // What you see in the box is the truth. Trailing newlines and nbsp are ignored.
-  const norm = s => (s || '').replace(/ /g, ' ').replace(/\r/g, '').replace(/\n+$/, '');
+  const norm = s => (s || '').replace(/\u00a0/g, ' ').replace(/\r/g, '').replace(/\n+$/, '');
 
   // Finds the Draft.js editor and TikTok's own copy of the text through React.
   function getCtx() {
@@ -51,32 +51,64 @@
   let pendingSig = '';
   let pendingSince = 0;
   let lastFixedSig = '';
+  let lastFixedAt = 0;
   let composing = false;
+  let composingSince = 0;
 
-  document.addEventListener('compositionstart', () => { composing = true; }, true);
+  document.addEventListener('compositionstart', () => { composing = true; composingSince = Date.now(); }, true);
   document.addEventListener('compositionend', () => { composing = false; }, true);
 
   setInterval(() => {
     try {
       const c = getCtx();
+      // A composition that never ends (some dictation tools do this) must not freeze the guard.
+      if (composing && Date.now() - composingSince > 1500) composing = false;
       if (!c || composing) { pendingSig = ''; return; }
 
       const dom = norm(c.ed.innerText);
       const model = norm(c.props.editorState.getCurrentContent().getPlainText());
 
-      if (dom === model) { pendingSig = ''; return; }
+      if (dom === model) { pendingSig = ''; lastFixedSig = ''; return; }
 
       // Only act when the mismatch has lasted a moment, so normal typing is never touched.
       const sig = dom + '\u0000' + model;
       if (sig !== pendingSig) { pendingSig = sig; pendingSince = Date.now(); return; }
-      if (Date.now() - pendingSince < 250 || sig === lastFixedSig) return;
+      if (Date.now() - pendingSince < 120) return;
+      // Same mismatch again right after a fix: wait a second before retrying instead of never.
+      if (sig === lastFixedSig && Date.now() - lastFixedAt < 1000) return;
 
       lastFixedSig = sig;
+      lastFixedAt = Date.now();
       resync(c, dom);
     } catch (e) {
       // Stay quiet. If TikTok changes its editor, the script just stops helping.
     }
-  }, 100);
+  }, 50);
+
+  // ---- Part 1b: placeholder ----
+  // The grey "Send a message..." text shows whenever TikTok's copy of the text is empty, even if
+  // the box has real text in it. Hide it the moment the box has text, without waiting for a resync.
+  let phQueued = false;
+  function fixPlaceholder() {
+    phQueued = false;
+    const ed = document.querySelector('.public-DraftEditor-content');
+    if (!ed) return;
+    const root = ed.closest('.DraftEditor-root');
+    const ph = root && root.querySelector('.public-DraftEditorPlaceholder-root');
+    if (!ph) return;
+    const hasText = ed.textContent.replace(/[\u200b\s]/g, '') !== '';
+    const want = hasText ? 'none' : '';
+    if (ph.style.display !== want) ph.style.display = want;
+  }
+  function queuePlaceholder() {
+    if (phQueued) return;
+    phQueued = true;
+    requestAnimationFrame(fixPlaceholder);
+  }
+  new MutationObserver(queuePlaceholder).observe(document.documentElement, {
+    childList: true, subtree: true, characterData: true
+  });
+  setInterval(queuePlaceholder, 250);
 
   // ---- Part 2: Enter sends ----
   // On the messages page TikTok never sees the Enter keydown, so Enter falls through as a
