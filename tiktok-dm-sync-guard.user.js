@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TikTok DM sync guard
 // @namespace    nokoding
-// @version      1.4
+// @version      1.4.1
 // @description  Replaces TikTok web's buggy DM box with a native one (Enter sends, no lost letters, no stuck messages) and turns on the photo/video sending and group chats TikTok already built into the web app.
 // @match        https://www.tiktok.com/*
 // @run-at       document-start
@@ -41,35 +41,8 @@
     return hit;
   }
 
-  // 1) The page config is read with JSON.parse. Patch big parses that carry abTestVersion.
-  try {
-    const origParse = JSON.parse;
-    JSON.parse = function (text, reviver) {
-      const out = origParse.call(this, text, reviver);
-      try {
-        if (typeof text === 'string' && text.length > 5000 && text.indexOf('abTestVersion') !== -1) patchTree(out, 0);
-      } catch (e) {}
-      return out;
-    };
-  } catch (e) {}
-
-  // 2) Backup: rewrite the config script tag as soon as the parser adds it.
-  function patchScriptTag(el) {
-    try {
-      if (el.__tkPatched) return;
-      el.__tkPatched = true;
-      const data = JSON.parse(el.textContent);
-      if (patchTree(data, 0)) el.textContent = JSON.stringify(data);
-    } catch (e) {}
-  }
-  try {
-    const mo = new MutationObserver(() => {
-      const el = document.getElementById('__UNIVERSAL_DATA_FOR_REHYDRATION__');
-      if (el && el.textContent.length) { patchScriptTag(el); mo.disconnect(); }
-    });
-    mo.observe(document.documentElement || document, { childList: true, subtree: true });
-    setTimeout(() => mo.disconnect(), 30000);
-  } catch (e) {}
+  // v1.4.1: flags are no longer patched before TikTok starts. Doing that broke the inbox on
+  // load (TikTok's message client failed to start). They're flipped after load instead.
 
   // 3) Last resort: patch the live copy React holds, in case the app got its config another way.
   function patchLive() {
@@ -96,6 +69,8 @@
       }
     } catch (e) {}
   }
+  // First flip shortly after the message client has started, then keep it applied.
+  setTimeout(patchLive, 4000);
   setInterval(patchLive, 5000);
 
   // ---- Part 1: our own message box ----
