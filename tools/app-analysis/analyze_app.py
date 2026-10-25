@@ -42,12 +42,13 @@ ANY_RE = re.compile('|'.join(p for ps in TOPICS.values() for p in ps), re.I)
 # Words that mean a code symbol is probably about messaging.
 SYMBOL_HINT = re.compile(r'(\bim\b|/im/|_im_|\.im\.|chat|inbox|conversation|message|msg|(?-i:[a-z]Dm[A-Z]|\bDM[A-Z]|_dm_)|/dm/|stranger|reaction|sticker|unsend|recall)', re.I)
 
-MAX_UI = 6000
-MAX_SYMBOLS = 4000
+UI_CAP_PER_TOPIC = 700
+MAX_SYMBOLS = 12000
 MAX_FILES = 4000
 CHUNK = 32 * 1024 * 1024
 TAIL = 1024
 
+ENGLISH_WORD = re.compile(r'\b(the|to|a|an|your|you|this|of|and|is|for|in|on|with|can|will|are|be|or|it|has|have|not|from|by|that)\b', re.I)
 ASCII_RUN = re.compile(rb'[\x20-\x7e]{5,400}')
 UTF16_RUN = re.compile(rb'(?:[\x20-\x7e]\x00){5,400}')
 
@@ -83,6 +84,8 @@ def looks_like_ui_text(s):
         return False
     if re.search(r'[{}<>;=\\]|https?://|\.(java|kt|so|xml)\b', s):
         return False
+    if not s.isascii() or not ENGLISH_WORD.search(s):
+        return False
     return True
 
 
@@ -96,14 +99,18 @@ class Collector:
         self.symbols = {}   # symbol -> topics
         self.files = {}     # path -> topics
         self.notes = []
+        self.topic_counts = defaultdict(int)
 
     def add_ui(self, s):
         s = re.sub(r'^[^A-Za-z0-9]+', '', s.strip())
         if s in self.ui or not looks_like_ui_text(s):
             return
         tp = topics_for(s)
-        if tp and len(self.ui) < MAX_UI:
-            self.ui[s] = tp
+        if not tp or all(self.topic_counts[x] >= UI_CAP_PER_TOPIC for x in tp):
+            return
+        self.ui[s] = tp
+        for x in tp:
+            self.topic_counts[x] += 1
 
     def add_symbol(self, s):
         if s in self.symbols or len(self.symbols) >= MAX_SYMBOLS:
@@ -174,6 +181,10 @@ def parse_strings_file(raw):
     return out
 
 
+MACHO_MAGIC = (b'\xcf\xfa\xed\xfe', b'\xca\xfe\xba\xbe', b'\xfe\xed\xfa\xcf', b'\xce\xfa\xed\xfe')
+EN_DIRS = ('en.lproj', 'Base.lproj', 'en-US.lproj', 'en_US.lproj', 'en-GB.lproj', 'English.lproj')
+
+
 def scan_ipa(zf, col):
     app_dirs = sorted({n.split('/')[1] for n in zf.namelist() if n.startswith('Payload/') and n.count('/') >= 2 and n.split('/')[1].endswith('.app')})
     if not app_dirs:
@@ -181,28 +192,36 @@ def scan_ipa(zf, col):
         return
     app = app_dirs[0]
     prefix = 'Payload/' + app + '/'
-    main_binary = prefix + app[:-4]
+    col.notes.append('iOS app folder: ' + app)
+    binaries = 0
+    string_files = 0
     for info in zf.infolist():
         n = info.filename
         col.add_file(n)
-        if not n.startswith(prefix):
+        if not n.startswith(prefix) or n.endswith('/'):
             continue
         rel = n[len(prefix):]
-        lang = rel.split('/')[0]
-        if rel.endswith('.strings') and (lang in ('en.lproj', 'Base.lproj') or '/' not in rel):
+        parts = rel.split('/')
+        english = len(parts) == 1 or any(p in EN_DIRS for p in parts[:-1])
+        if rel.endswith('.strings') and english:
+            string_files += 1
             with zf.open(info) as fp:
                 for k, v in parse_strings_file(fp.read()).items():
                     col.add_ui(v)
                     col.add_ui(k.replace('_', ' '))
-        elif n == main_binary:
+        elif rel.endswith('.json') and english and info.file_size < 8 * 1024 * 1024:
+            string_files += 1
             with zf.open(info) as fp:
                 col.feed_runs(stream_runs(fp))
-        elif rel.startswith('Frameworks/') and rel.count('/') == 2 and not rel.endswith('/'):
-            # Frameworks/Name.framework/Name is the framework binary
-            fw = rel.split('/')[1]
-            if fw.endswith('.framework') and rel.endswith('/' + fw[:-10]) and re.search(r'(chat|message|im|inbox|dm)', fw, re.I):
+        elif info.file_size > 200 * 1024 and not re.search(r'\.(png|jpg|jpeg|mp4|mov|car|ttf|otf|caf|mp3|wav|webp|gif|lottie|zip|pdf)$', rel, re.I):
+            with zf.open(info) as fp:
+                head = fp.read(4)
+            if head in MACHO_MAGIC:
+                binaries += 1
+                col.notes.append('scanned binary: %s (%d MB)' % (rel, info.file_size // (1024 * 1024)))
                 with zf.open(info) as fp:
                     col.feed_runs(stream_runs(fp))
+    col.notes.append('%d Mach-O binaries scanned, %d English string files read' % (binaries, string_files))
 
 
 def scan(path):
@@ -230,6 +249,14 @@ def scan(path):
 def norm(s):
     s = re.sub(r'%\d*\$?[sdf@]|\{\d*\}|\{[a-z_]+\}|%[sd@]', '#', s.lower())
     return re.sub(r'[^a-z# ]+', '', s).strip()
+
+
+def package_of(name):
+    n = name.lstrip('L')
+    if '/' in n:
+        return '/'.join(n.split('/')[:6])
+    m = re.match(r'_?(?:OBJC_CLASS_\$_)?([A-Z]{2,5})', n)
+    return m.group(1) if m else n[:12]
 
 
 def compare(a, b):
@@ -282,6 +309,22 @@ def compare(a, b):
     section('Only in %s' % b['platform'], only_b, B)
     lines.append('## Shared strings: %d' % len(both))
     lines.append('')
+    lines.append('## Scan notes')
+    lines.append('')
+    for rep in (a, b):
+        for n in rep.get('notes', [])[:40]:
+            lines.append('- %s: %s' % (rep['platform'], n))
+    lines.append('')
+    lines.append('## Messaging code by package or prefix (count)')
+    lines.append('')
+    for rep in (a, b):
+        counts = defaultdict(int)
+        for it in rep['symbols']:
+            counts[package_of(it['name'])] += 1
+        lines.append('### %s' % rep['platform'])
+        for k, v in sorted(counts.items(), key=lambda kv: -kv[1])[:60]:
+            lines.append('- %s (%d)' % (k, v))
+        lines.append('')
     lines.append('## Layout, class and file names that mention messaging')
     lines.append('')
     for rep in (a, b):
