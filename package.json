@@ -1,7 +1,7 @@
 {
   "name": "tiktok-plus",
   "private": true,
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "TikTok Plus userscript (built into tiktok-dm-sync-guard.user.js)",
   "scripts": {
     "build": "node build.mjs"

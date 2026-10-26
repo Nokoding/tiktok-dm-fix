@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TikTok Plus
 // @namespace    nokoding
-// @version      2.1.0
+// @version      2.1.1
 // @description  Makes TikTok web better: fixed DM box (Enter sends, no lost letters), photos, videos and group chats in DMs, double audio fix, speed control, background play and more. Settings behind the gear button.
 // @match        https://www.tiktok.com/*
 // @run-at       document-start
@@ -88,7 +88,7 @@
   var KEY = "tkplus:settings:v1";
   var SCHEMA = [
     { group: "Messages", key: "composer", label: "Fixed message box", desc: "Native text box: Enter sends, no lost letters, no ghost text.", type: "toggle", def: true, reload: true },
-    { group: "Messages", key: "unlockMedia", label: "Photos and videos in DMs", desc: "Turns on TikTok's own photo and video sending.", type: "toggle", def: true, reload: true },
+    { group: "Messages", key: "unlockMedia", label: "Photo button in DMs", desc: "Shows TikTok's hidden photo and video button. TikTok's server still refuses web photos on most accounts, so sends may fail.", type: "toggle", def: false, reload: true },
     { group: "Messages", key: "unlockGroups", label: "Group chats", desc: "Turns on TikTok's own group chats on web.", type: "toggle", def: true, reload: true },
     { group: "Look", key: "appLook", label: "App-style look", desc: "Gradient bubbles that group like the app, pill message box, livelier inbox.", type: "toggle", def: true },
     {
@@ -831,7 +831,7 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
   }
 
   // src/ui/panel.js
-  var VERSION = true ? "2.1.0" : "";
+  var VERSION = true ? "2.1.1" : "";
   var CSS5 = `
   .tkp-gear { position: fixed; z-index: 2147483001; left: 14px; bottom: 14px; width: 40px; height: 40px;
     border-radius: 50%; border: 1px solid rgba(255,255,255,.14); cursor: pointer;
@@ -1009,7 +1009,7 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
 
   // src/main.js
   if (!window.__tkPlus) {
-    window.__tkPlus = { version: true ? "2.1.0" : "" };
+    window.__tkPlus = { version: true ? "2.1.1" : "" };
     window.__tkDmSyncGuard12 = window.__tkDmSyncGuard13 = window.__tkDmSyncGuard14 = true;
     safe("flags", installFlags);
     safe("codecSwap", installCodecSwap);

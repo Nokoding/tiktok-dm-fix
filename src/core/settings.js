@@ -5,7 +5,7 @@ const KEY = 'tkplus:settings:v1';
 // reload: true means the change only takes effect after a page reload.
 export const SCHEMA = [
   { group: 'Messages', key: 'composer', label: 'Fixed message box', desc: 'Native text box: Enter sends, no lost letters, no ghost text.', type: 'toggle', def: true, reload: true },
-  { group: 'Messages', key: 'unlockMedia', label: 'Photos and videos in DMs', desc: "Turns on TikTok's own photo and video sending.", type: 'toggle', def: true, reload: true },
+  { group: 'Messages', key: 'unlockMedia', label: 'Photo button in DMs', desc: "Shows TikTok's hidden photo and video button. TikTok's server still refuses web photos on most accounts, so sends may fail.", type: 'toggle', def: false, reload: true },
   { group: 'Messages', key: 'unlockGroups', label: 'Group chats', desc: "Turns on TikTok's own group chats on web.", type: 'toggle', def: true, reload: true },
   { group: 'Look', key: 'appLook', label: 'App-style look', desc: 'Gradient bubbles that group like the app, pill message box, livelier inbox.', type: 'toggle', def: true },
   { group: 'Look', key: 'accent', label: 'Accent color', desc: 'Your bubbles, the send button and highlights.', type: 'select', def: 'tiktok',
