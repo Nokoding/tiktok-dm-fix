@@ -6,11 +6,11 @@ const VERSION = typeof __TKP_VERSION__ !== 'undefined' ? __TKP_VERSION__ : '';
 
 const CSS = `
   .tkp-gear { position: fixed; z-index: 2147483001; left: 14px; bottom: 14px; width: 40px; height: 40px;
-    border-radius: 50%; border: 1px solid rgba(255,255,255,.14); cursor: pointer;
-    background: linear-gradient(135deg, rgba(254,44,85,.9), rgba(37,244,238,.75));
-    box-shadow: 0 6px 22px rgba(0,0,0,.4); display: grid; place-items: center; color: #fff;
-    font-size: 20px; line-height: 1; transition: transform .25s; padding: 0; }
-  .tkp-gear:hover { transform: rotate(60deg) scale(1.06); }
+    border-radius: 50%; border: 0; cursor: pointer; background: transparent; color: #fff;
+    display: grid; place-items: center; padding: 0; transition: background .15s, transform .15s; }
+  html:not([data-theme="dark"]) .tkp-gear { color: #161823; }
+  .tkp-gear:hover { background: rgba(255,255,255,.1); transform: scale(1.06); }
+  .tkp-gear svg { width: 26px; height: 26px; display: block; }
   .tkp-overlay { position: fixed; inset: 0; z-index: 2147483002; background: rgba(0,0,0,.45);
     backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); display: grid; place-items: center; }
   .tkp-panel { width: min(520px, calc(100vw - 32px)); max-height: min(80vh, 760px); overflow: auto;
@@ -46,6 +46,23 @@ const CSS = `
   .tkp-btn.tkp-primary { background: #fe2c55; }
   .tkp-foot { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 18px 18px; border-top: 1px solid rgba(255,255,255,.08); }
 `;
+
+// The TikTok outline mark with a small rounded plus at the top right. Built with the DOM (no innerHTML).
+function logo() {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('fill', 'none');
+  const mk = (d, w) => {
+    const p = document.createElementNS(NS, 'path');
+    p.setAttribute('d', d); p.setAttribute('stroke', 'currentColor'); p.setAttribute('stroke-width', w);
+    p.setAttribute('stroke-linejoin', 'round'); p.setAttribute('stroke-linecap', 'round'); p.setAttribute('fill', 'none');
+    svg.appendChild(p);
+  };
+  mk('M16.8217 5.1344C16.0886 4.29394 15.6479 3.19805 15.6479 2H14.7293M16.8217 5.1344C17.4898 5.90063 18.3944 6.45788 19.4245 6.67608C19.7446 6.74574 20.0786 6.78293 20.4266 6.78293V10.2191C18.645 10.2191 16.9932 9.64801 15.6477 8.68211V15.6707C15.6477 19.1627 12.8082 22 9.32386 22C7.50043 22 5.85334 21.2198 4.69806 19.98C3.64486 18.847 2.99994 17.3331 2.99994 15.6707C2.99994 12.2298 5.75592 9.42509 9.17073 9.35079M16.8217 5.1344C16.8039 5.12276 16.7861 5.11101 16.7684 5.09914M6.9855 17.3517C6.64217 16.8781 6.43802 16.2977 6.43802 15.6661C6.43802 14.0734 7.73249 12.7778 9.32394 12.7778C9.62087 12.7778 9.9085 12.8288 10.1776 12.9124V9.40192C9.89921 9.36473 9.61622 9.34149 9.32394 9.34149C9.27287 9.34149 8.86177 9.36884 8.81073 9.36884M14.7244 2H12.2097L12.2051 15.7775C12.1494 17.3192 10.8781 18.5591 9.32386 18.5591C8.35878 18.5591 7.50971 18.0808 6.98079 17.3564', 1.1);
+  // small plus with soft, slightly curved arms
+  mk('M20.4 0.9Q20.4 2.9 20.4 4.9M18.4 2.9Q20.4 2.9 22.4 2.9', 1.4);
+  return svg;
+}
 
 function row(s, needsReload) {
   let control;
@@ -134,7 +151,7 @@ function openPanel() {
 
 export function startPanel() {
   addStyle('tkp-panel-css', CSS);
-  const gear = h('button', { class: 'tkp-gear', title: 'TikTok Plus settings', 'aria-label': 'TikTok Plus settings', onclick: openPanel }, '⚙');
+  const gear = h('button', { class: 'tkp-gear', title: 'TikTok Plus settings', 'aria-label': 'TikTok Plus settings', onclick: openPanel }, logo());
   const mount = () => { if (document.body && !gear.isConnected) document.body.appendChild(gear); };
   mount();
   setInterval(mount, 1500);

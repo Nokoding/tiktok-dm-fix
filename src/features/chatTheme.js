@@ -4,7 +4,7 @@ import { get } from '../core/settings.js';
 import { addStyle, removeStyle, h, loadData, saveData, toast } from '../core/util.js';
 import { openPopover } from '../ui/popover.js';
 import { ACCENTS } from './look.js';
-import { headerHost } from './msgTools.js';
+import { headerAction } from './msgTools.js';
 
 export const WALLPAPERS = {
   none: { label: 'None', css: '' },
@@ -104,13 +104,8 @@ function panel(el) {
 export function startChatTheme() {
   let lastKey = null;
   setInterval(() => {
-    const host = get('chatThemes') ? headerHost() : null;
-    if (host && !host.querySelector('.tkp-ct-btn')) {
-      const btn = h('button', { class: 'tkp-hdr-btn tkp-ct-btn', title: 'Chat appearance (wallpaper, bubbles)', type: 'button' }, '🎨');
-      btn.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); openPopover(btn, panel, { width: 280 }); });
-      host.appendChild(btn);
-    }
-    if (!get('chatThemes')) document.querySelectorAll('.tkp-ct-btn').forEach(b => b.remove());
+    if (get('chatThemes')) headerAction('theme', { icon: '🎨', label: 'Chat wallpaper and colors', order: 1, open: b => openPopover(b, panel, { width: 280 }) });
+    else headerAction('theme', null);
     const key = chatKey();
     if (key !== lastKey) { lastKey = key; apply(); }
   }, 700);

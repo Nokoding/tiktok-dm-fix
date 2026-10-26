@@ -3,7 +3,7 @@
 import { get } from '../core/settings.js';
 import { addStyle, h } from '../core/util.js';
 import { openPopover } from '../ui/popover.js';
-import { headerHost } from './msgTools.js';
+import { headerAction } from './msgTools.js';
 
 const CSS = `
   [data-tkp-hit] [data-e2e="dm-new-message-text"] { outline: 2px solid #ffd60a; outline-offset: 2px; }
@@ -51,12 +51,7 @@ function panel(el) {
 export function startChatSearch() {
   addStyle('tkp-search-css', CSS);
   setInterval(() => {
-    if (!get('chatSearch')) return;
-    const host = headerHost();
-    if (host && !host.querySelector('.tkp-search-btn')) {
-      const b = h('button', { class: 'tkp-hdr-btn tkp-search-btn', title: 'Search this chat', type: 'button' }, '🔍');
-      b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); if (!openPopover(b, panel, { width: 300 })) clear(); });
-      host.appendChild(b);
-    }
+    if (!get('chatSearch')) { headerAction('search', null); return; }
+    headerAction('search', { icon: '🔍', label: 'Search this chat', order: 2, open: b => { if (!openPopover(b, panel, { width: 300 })) clear(); } });
   }, 900);
 }

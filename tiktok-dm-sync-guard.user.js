@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TikTok Plus
 // @namespace    nokoding
-// @version      2.5.0
+// @version      2.5.1
 // @description  Makes TikTok web better: fixed DM box (Enter sends, no lost letters), photos, videos and group chats in DMs, double audio fix, speed control, background play and more. Settings behind the gear button.
 // @match        https://www.tiktok.com/*
 // @run-at       document-start
@@ -440,6 +440,25 @@
     p.onChange(next);
   }
   var boxes = /* @__PURE__ */ new Set();
+  var lastKey = { shift: false, t: 0 };
+  function installEnterGuard() {
+    const track = (e) => {
+      lastKey.shift = e.shiftKey;
+      lastKey.t = performance.now();
+    };
+    window.addEventListener("keypress", track, true);
+    window.addEventListener("keydown", (e) => {
+      track(e);
+      if (!get("composer")) return;
+      const ta = e.target;
+      if (!ta || !ta.classList || !ta.classList.contains("tkdm-input")) return;
+      if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && !e.isComposing && e.keyCode !== 229) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        send([...boxes].find((s) => s.ta === ta));
+      }
+    }, true);
+  }
   function insertText(text) {
     const st = [...boxes].find((s) => s.box.isConnected);
     if (!st) return false;
@@ -490,6 +509,13 @@
     ta.addEventListener("keydown", (e) => {
       e.stopPropagation();
       if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && !e.isComposing && e.keyCode !== 229) {
+        e.preventDefault();
+        send(st);
+      }
+    });
+    ta.addEventListener("beforeinput", (e) => {
+      if ((e.inputType === "insertLineBreak" || e.inputType === "insertParagraph") && !e.isComposing) {
+        if (lastKey.shift && performance.now() - lastKey.t < 400) return;
         e.preventDefault();
         send(st);
       }
@@ -1348,6 +1374,8 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
   .tkp-hdr-btn { all: unset; cursor: pointer; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; font-size: 16px; }
   .tkp-hdr-btn:hover { background: rgba(255,255,255,.08); }
   .tkp-hdr-spacer { flex: 1; }
+  .tkp-hdr-more { font-size: 20px; letter-spacing: -1px; padding-bottom: 5px; box-sizing: border-box; }
+  .tkp-menu-ic { width: 22px; text-align: center; flex: none; }
   .tkp-flash { animation: tkp-flash 1.4s ease-out; border-radius: 14px; }
   @keyframes tkp-flash { 0% { background: rgba(254,44,85,.35); } 100% { background: transparent; } }
 `;
@@ -1372,6 +1400,38 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
     }
     if (!host.querySelector(".tkp-hdr-spacer")) host.appendChild(Object.assign(document.createElement("div"), { className: "tkp-hdr-spacer" }));
     return host;
+  }
+  var actions = /* @__PURE__ */ new Map();
+  function headerAction(id, spec) {
+    if (spec) actions.set(id, spec);
+    else actions.delete(id);
+    const host = headerHost();
+    const old = host && host.querySelector(".tkp-hdr-more");
+    if (!host || !actions.size) {
+      if (old) old.remove();
+      return;
+    }
+    if (old) {
+      if (old !== host.lastElementChild) host.appendChild(old);
+      return;
+    }
+    const b = h("button", { class: "tkp-hdr-btn tkp-hdr-more", title: "More: chat look, search, nickname, saved, gallery", type: "button" }, "⋯");
+    b.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openPopover(b, (el) => {
+        el.append(h("h5", null, "Chat tools"));
+        for (const a of [...actions.values()].sort((x, y) => (x.order || 0) - (y.order || 0))) {
+          const row2 = h("div", { class: "tkp-pop-row" }, h("span", { class: "tkp-menu-ic" }, a.icon), h("span", { class: "tkp-grow" }, a.label));
+          row2.addEventListener("click", () => {
+            closePopover();
+            setTimeout(() => a.open(b), 0);
+          });
+          el.append(row2);
+        }
+      }, { width: 230 });
+    });
+    host.appendChild(b);
   }
   function savedPanel(el) {
     const list2 = saved();
@@ -1402,11 +1462,14 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
   function startMsgTools() {
     addStyle("tkp-mt-css", CSS8);
     setInterval(() => {
-      if (!get("msgTools")) return;
+      if (!get("msgTools")) {
+        headerAction("saved", null);
+        return;
+      }
       for (const item of document.querySelectorAll('[data-e2e="dm-new-chat-item"]')) {
         const textEl = item.querySelector('[data-e2e="dm-new-message-text"]');
-        const actions = item.querySelector('[class*="DivActions"]');
-        if (!textEl || !actions || actions.querySelector(".tkp-mt-btn")) continue;
+        const actions2 = item.querySelector('[class*="DivActions"]');
+        if (!textEl || !actions2 || actions2.querySelector(".tkp-mt-btn")) continue;
         const copy = h("button", { class: "tkp-mt-btn", title: "Copy text", type: "button" }, "⧉");
         copy.addEventListener("click", (e) => {
           e.stopPropagation();
@@ -1422,18 +1485,9 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
           saveData("saved", l.slice(-500));
           toast("Saved. Open them with the bookmark button in the chat header.");
         });
-        actions.prepend(copy, save4);
+        actions2.prepend(copy, save4);
       }
-      const host = headerHost();
-      if (host && !host.querySelector(".tkp-saved-btn")) {
-        const b = h("button", { class: "tkp-hdr-btn tkp-saved-btn", title: "Saved messages", type: "button" }, "🔖");
-        b.addEventListener("click", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          openPopover(b, savedPanel, { width: 330 });
-        });
-        host.appendChild(b);
-      }
+      headerAction("saved", { icon: "🔖", label: "Saved messages", order: 4, open: (b) => openPopover(b, savedPanel, { width: 330 }) });
     }, 900);
     void closePopover;
   }
@@ -1681,22 +1735,13 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
     );
   }
   function startChatTheme() {
-    let lastKey = null;
+    let lastKey2 = null;
     setInterval(() => {
-      const host = get("chatThemes") ? headerHost() : null;
-      if (host && !host.querySelector(".tkp-ct-btn")) {
-        const btn = h("button", { class: "tkp-hdr-btn tkp-ct-btn", title: "Chat appearance (wallpaper, bubbles)", type: "button" }, "🎨");
-        btn.addEventListener("click", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          openPopover(btn, panel, { width: 280 });
-        });
-        host.appendChild(btn);
-      }
-      if (!get("chatThemes")) document.querySelectorAll(".tkp-ct-btn").forEach((b) => b.remove());
+      if (get("chatThemes")) headerAction("theme", { icon: "🎨", label: "Chat wallpaper and colors", order: 1, open: (b) => openPopover(b, panel, { width: 280 }) });
+      else headerAction("theme", null);
       const key = chatKey();
-      if (key !== lastKey) {
-        lastKey = key;
+      if (key !== lastKey2) {
+        lastKey2 = key;
         apply();
       }
     }, 700);
@@ -1915,15 +1960,15 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
       if (!get("translate")) return;
       for (const item of document.querySelectorAll('[data-e2e="dm-new-chat-item"]')) {
         if (!item.querySelector('[data-e2e="dm-new-message-text"]')) continue;
-        const actions = item.querySelector('[class*="DivActions"]');
-        if (actions && !actions.querySelector(".tkp-tr-btn")) {
+        const actions2 = item.querySelector('[class*="DivActions"]');
+        if (actions2 && !actions2.querySelector(".tkp-tr-btn")) {
           const b = h("button", { class: "tkp-tr-btn", title: "Translate", type: "button" }, "Aa");
           b.addEventListener("click", (e) => {
             e.stopPropagation();
             e.preventDefault();
             translateItem(item);
           });
-          actions.prepend(b);
+          actions2.prepend(b);
         }
         if (get("autoTranslate") && !done.has(item) && item.getAttribute("data-tkp-side") !== "me") {
           done.add(item);
@@ -1999,17 +2044,13 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
   function startChatSearch() {
     addStyle("tkp-search-css", CSS11);
     setInterval(() => {
-      if (!get("chatSearch")) return;
-      const host = headerHost();
-      if (host && !host.querySelector(".tkp-search-btn")) {
-        const b = h("button", { class: "tkp-hdr-btn tkp-search-btn", title: "Search this chat", type: "button" }, "🔍");
-        b.addEventListener("click", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (!openPopover(b, panel2, { width: 300 })) clear();
-        });
-        host.appendChild(b);
+      if (!get("chatSearch")) {
+        headerAction("search", null);
+        return;
       }
+      headerAction("search", { icon: "🔍", label: "Search this chat", order: 2, open: (b) => {
+        if (!openPopover(b, panel2, { width: 300 })) clear();
+      } });
     }, 900);
   }
 
@@ -2083,19 +2124,11 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
     setInterval(() => {
       if (!get("nicknames")) {
         document.querySelectorAll("[data-tkp-nick]").forEach((e) => e.removeAttribute("data-tkp-nick"));
+        headerAction("nick", null);
         return;
       }
       applyNicks();
-      const host = headerHost();
-      if (host && !host.querySelector(".tkp-nick-btn")) {
-        const b = h("button", { class: "tkp-hdr-btn tkp-nick-btn", title: "Set a nickname", type: "button" }, "✏️");
-        b.addEventListener("click", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          openPopover(b, panel3, { width: 280 });
-        });
-        host.appendChild(b);
-      }
+      headerAction("nick", { icon: "✏️", label: "Set a nickname", order: 3, open: (b) => openPopover(b, panel3, { width: 280 }) });
     }, 800);
   }
 
@@ -2667,30 +2700,21 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
           slot.append(b);
         }
       } else document.querySelectorAll(".tkp-emo-btn").forEach((x) => x.remove());
-      const host = get("mediaGallery") ? headerHost() : null;
-      if (host && !host.querySelector(".tkp-gal-btn")) {
-        const b = h("button", { class: "tkp-hdr-btn tkp-gal-btn", type: "button", title: "Shared posts, photos and links" }, "🖼");
-        b.addEventListener("click", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          openPopover(b, gallery, { width: 340 });
-        });
-        host.appendChild(b);
-      }
-      if (!get("mediaGallery")) document.querySelectorAll(".tkp-gal-btn").forEach((x) => x.remove());
+      if (get("mediaGallery")) headerAction("gallery", { icon: "🖼", label: "Shared posts, photos, links", order: 5, open: (b) => openPopover(b, gallery, { width: 340 }) });
+      else headerAction("gallery", null);
     }, 900);
     void toast;
   }
 
   // src/ui/panel.js
-  var VERSION = true ? "2.5.0" : "";
+  var VERSION = true ? "2.5.1" : "";
   var CSS18 = `
   .tkp-gear { position: fixed; z-index: 2147483001; left: 14px; bottom: 14px; width: 40px; height: 40px;
-    border-radius: 50%; border: 1px solid rgba(255,255,255,.14); cursor: pointer;
-    background: linear-gradient(135deg, rgba(254,44,85,.9), rgba(37,244,238,.75));
-    box-shadow: 0 6px 22px rgba(0,0,0,.4); display: grid; place-items: center; color: #fff;
-    font-size: 20px; line-height: 1; transition: transform .25s; padding: 0; }
-  .tkp-gear:hover { transform: rotate(60deg) scale(1.06); }
+    border-radius: 50%; border: 0; cursor: pointer; background: transparent; color: #fff;
+    display: grid; place-items: center; padding: 0; transition: background .15s, transform .15s; }
+  html:not([data-theme="dark"]) .tkp-gear { color: #161823; }
+  .tkp-gear:hover { background: rgba(255,255,255,.1); transform: scale(1.06); }
+  .tkp-gear svg { width: 26px; height: 26px; display: block; }
   .tkp-overlay { position: fixed; inset: 0; z-index: 2147483002; background: rgba(0,0,0,.45);
     backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); display: grid; place-items: center; }
   .tkp-panel { width: min(520px, calc(100vw - 32px)); max-height: min(80vh, 760px); overflow: auto;
@@ -2726,6 +2750,25 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
   .tkp-btn.tkp-primary { background: #fe2c55; }
   .tkp-foot { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 18px 18px; border-top: 1px solid rgba(255,255,255,.08); }
 `;
+  function logo() {
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("fill", "none");
+    const mk = (d, w) => {
+      const p = document.createElementNS(NS, "path");
+      p.setAttribute("d", d);
+      p.setAttribute("stroke", "currentColor");
+      p.setAttribute("stroke-width", w);
+      p.setAttribute("stroke-linejoin", "round");
+      p.setAttribute("stroke-linecap", "round");
+      p.setAttribute("fill", "none");
+      svg.appendChild(p);
+    };
+    mk("M16.8217 5.1344C16.0886 4.29394 15.6479 3.19805 15.6479 2H14.7293M16.8217 5.1344C17.4898 5.90063 18.3944 6.45788 19.4245 6.67608C19.7446 6.74574 20.0786 6.78293 20.4266 6.78293V10.2191C18.645 10.2191 16.9932 9.64801 15.6477 8.68211V15.6707C15.6477 19.1627 12.8082 22 9.32386 22C7.50043 22 5.85334 21.2198 4.69806 19.98C3.64486 18.847 2.99994 17.3331 2.99994 15.6707C2.99994 12.2298 5.75592 9.42509 9.17073 9.35079M16.8217 5.1344C16.8039 5.12276 16.7861 5.11101 16.7684 5.09914M6.9855 17.3517C6.64217 16.8781 6.43802 16.2977 6.43802 15.6661C6.43802 14.0734 7.73249 12.7778 9.32394 12.7778C9.62087 12.7778 9.9085 12.8288 10.1776 12.9124V9.40192C9.89921 9.36473 9.61622 9.34149 9.32394 9.34149C9.27287 9.34149 8.86177 9.36884 8.81073 9.36884M14.7244 2H12.2097L12.2051 15.7775C12.1494 17.3192 10.8781 18.5591 9.32386 18.5591C8.35878 18.5591 7.50971 18.0808 6.98079 17.3564", 1.1);
+    mk("M20.4 0.9Q20.4 2.9 20.4 4.9M18.4 2.9Q20.4 2.9 22.4 2.9", 1.4);
+    return svg;
+  }
   function row(s, needsReload) {
     let control;
     if (s.type === "toggle") {
@@ -2863,7 +2906,7 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
   }
   function startPanel() {
     addStyle("tkp-panel-css", CSS18);
-    const gear = h("button", { class: "tkp-gear", title: "TikTok Plus settings", "aria-label": "TikTok Plus settings", onclick: openPanel }, "⚙");
+    const gear = h("button", { class: "tkp-gear", title: "TikTok Plus settings", "aria-label": "TikTok Plus settings", onclick: openPanel }, logo());
     const mount = () => {
       if (document.body && !gear.isConnected) document.body.appendChild(gear);
     };
@@ -2873,12 +2916,13 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
 
   // src/main.js
   if (!window.__tkPlus) {
-    window.__tkPlus = { version: true ? "2.5.0" : "" };
+    window.__tkPlus = { version: true ? "2.5.1" : "" };
     window.__tkDmSyncGuard12 = window.__tkDmSyncGuard13 = window.__tkDmSyncGuard14 = true;
     safe("flags", installFlags);
     safe("codecSwap", installCodecSwap);
     safe("backgroundPlay", installBackgroundPlay);
     safe("audioHook", installAudioHook);
+    safe("enterGuard", installEnterGuard);
     safe("watchdog", startWatchdog);
     onReady(() => {
       safe("composer", startComposer);

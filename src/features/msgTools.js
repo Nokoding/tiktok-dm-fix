@@ -11,6 +11,8 @@ const CSS = `
   .tkp-hdr-btn { all: unset; cursor: pointer; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; font-size: 16px; }
   .tkp-hdr-btn:hover { background: rgba(255,255,255,.08); }
   .tkp-hdr-spacer { flex: 1; }
+  .tkp-hdr-more { font-size: 20px; letter-spacing: -1px; padding-bottom: 5px; box-sizing: border-box; }
+  .tkp-menu-ic { width: 22px; text-align: center; flex: none; }
   .tkp-flash { animation: tkp-flash 1.4s ease-out; border-radius: 14px; }
   @keyframes tkp-flash { 0% { background: rgba(254,44,85,.35); } 100% { background: transparent; } }
 `;
@@ -32,6 +34,29 @@ export function headerHost() {
   return host;
 }
 
+// Chat header actions (theme, search, nickname, saved, gallery) live behind one ... button.
+const actions = new Map();
+export function headerAction(id, spec) {
+  if (spec) actions.set(id, spec); else actions.delete(id);
+  const host = headerHost();
+  const old = host && host.querySelector('.tkp-hdr-more');
+  if (!host || !actions.size) { if (old) old.remove(); return; }
+  if (old) { if (old !== host.lastElementChild) host.appendChild(old); return; }
+  const b = h('button', { class: 'tkp-hdr-btn tkp-hdr-more', title: 'More: chat look, search, nickname, saved, gallery', type: 'button' }, '⋯');
+  b.addEventListener('click', e => {
+    e.preventDefault(); e.stopPropagation();
+    openPopover(b, el => {
+      el.append(h('h5', null, 'Chat tools'));
+      for (const a of [...actions.values()].sort((x, y) => (x.order || 0) - (y.order || 0))) {
+        const row = h('div', { class: 'tkp-pop-row' }, h('span', { class: 'tkp-menu-ic' }, a.icon), h('span', { class: 'tkp-grow' }, a.label));
+        row.addEventListener('click', () => { closePopover(); setTimeout(() => a.open(b), 0); });
+        el.append(row);
+      }
+    }, { width: 230 });
+  });
+  host.appendChild(b);
+}
+
 function savedPanel(el) {
   const list = saved();
   el.append(h('h5', null, 'Saved messages'));
@@ -49,7 +74,7 @@ function savedPanel(el) {
 export function startMsgTools() {
   addStyle('tkp-mt-css', CSS);
   setInterval(() => {
-    if (!get('msgTools')) return;
+    if (!get('msgTools')) { headerAction('saved', null); return; }
     for (const item of document.querySelectorAll('[data-e2e="dm-new-chat-item"]')) {
       const textEl = item.querySelector('[data-e2e="dm-new-message-text"]');
       const actions = item.querySelector('[class*="DivActions"]');
@@ -69,12 +94,7 @@ export function startMsgTools() {
       });
       actions.prepend(copy, save);
     }
-    const host = headerHost();
-    if (host && !host.querySelector('.tkp-saved-btn')) {
-      const b = h('button', { class: 'tkp-hdr-btn tkp-saved-btn', title: 'Saved messages', type: 'button' }, '🔖');
-      b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); openPopover(b, savedPanel, { width: 330 }); });
-      host.appendChild(b);
-    }
+    headerAction('saved', { icon: '🔖', label: 'Saved messages', order: 4, open: b => openPopover(b, savedPanel, { width: 330 }) });
   }, 900);
   void closePopover;
 }

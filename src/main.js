@@ -4,7 +4,7 @@ import { safe, onReady } from './core/util.js';
 import { installFlags } from './features/flags.js';
 import { installCodecSwap } from './features/codecSwap.js';
 import { installBackgroundPlay, startAutoPause } from './features/visibility.js';
-import { startComposer } from './features/composer.js';
+import { startComposer, installEnterGuard } from './features/composer.js';
 import { startWatchdog } from './features/audioWatchdog.js';
 import { startSpeed } from './features/speed.js';
 import { startDmLag } from './features/dmLag.js';
@@ -36,6 +36,7 @@ if (!window.__tkPlus) {
   safe('codecSwap', installCodecSwap);
   safe('backgroundPlay', installBackgroundPlay);
   safe('audioHook', installAudioHook);
+  safe('enterGuard', installEnterGuard);
 
   // Media events are caught from the start, so no early video slips past.
   safe('watchdog', startWatchdog);

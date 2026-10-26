@@ -4,7 +4,7 @@ import { get } from '../core/settings.js';
 import { addStyle, h, fiberOf, toast } from '../core/util.js';
 import { openPopover, closePopover } from '../ui/popover.js';
 import { insertText } from './composer.js';
-import { headerHost, composerSlot } from './msgTools.js';
+import { headerAction, composerSlot } from './msgTools.js';
 
 // TikTok's hidden emoticons. The apps draw them as little faces. On web they stay as text,
 // so we show the closest emoji (the token itself still goes out).
@@ -189,13 +189,8 @@ export function startDmExtras() {
         slot.append(b);
       }
     } else document.querySelectorAll('.tkp-emo-btn').forEach(x => x.remove());
-    const host = get('mediaGallery') ? headerHost() : null;
-    if (host && !host.querySelector('.tkp-gal-btn')) {
-      const b = h('button', { class: 'tkp-hdr-btn tkp-gal-btn', type: 'button', title: 'Shared posts, photos and links' }, '🖼');
-      b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); openPopover(b, gallery, { width: 340 }); });
-      host.appendChild(b);
-    }
-    if (!get('mediaGallery')) document.querySelectorAll('.tkp-gal-btn').forEach(x => x.remove());
+    if (get('mediaGallery')) headerAction('gallery', { icon: '🖼', label: 'Shared posts, photos, links', order: 5, open: b => openPopover(b, gallery, { width: 340 }) });
+    else headerAction('gallery', null);
   }, 900);
   void toast;
 }

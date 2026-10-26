@@ -30,6 +30,24 @@ function setModel(p, text) {
 }
 
 const boxes = new Set();
+const lastKey = { shift: false, t: 0 };
+
+// Runs at document-start, so it sees Enter before any page script can swallow it.
+export function installEnterGuard() {
+  const track = e => { lastKey.shift = e.shiftKey; lastKey.t = performance.now(); };
+  window.addEventListener('keypress', track, true);
+  window.addEventListener('keydown', e => {
+    track(e);
+    if (!get('composer')) return;
+    const ta = e.target;
+    if (!ta || !ta.classList || !ta.classList.contains('tkdm-input')) return;
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && !e.isComposing && e.keyCode !== 229) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      send([...boxes].find(s => s.ta === ta));
+    }
+  }, true);
+}
 
 // Other features (quick replies, emoticons, stickers) insert text through this.
 export function insertText(text) {
@@ -82,6 +100,15 @@ function attach(box) {
   ta.addEventListener('keydown', e => {
     e.stopPropagation(); // keep TikTok's page shortcuts out of the box
     if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && !e.isComposing && e.keyCode !== 229) {
+      e.preventDefault();
+      send(st);
+    }
+  });
+  // Backup path: if a page script swallows the keydown, the browser still announces the line break it
+  // is about to insert. Shift state comes from the last key event we saw (an InputEvent has none).
+  ta.addEventListener('beforeinput', e => {
+    if ((e.inputType === 'insertLineBreak' || e.inputType === 'insertParagraph') && !e.isComposing) {
+      if (lastKey.shift && performance.now() - lastKey.t < 400) return;
       e.preventDefault();
       send(st);
     }

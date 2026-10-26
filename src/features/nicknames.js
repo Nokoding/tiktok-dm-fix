@@ -3,7 +3,7 @@
 import { get } from '../core/settings.js';
 import { addStyle, h, loadData, saveData } from '../core/util.js';
 import { openPopover, closePopover } from '../ui/popover.js';
-import { headerHost, chatHandle } from './msgTools.js';
+import { headerAction, chatHandle } from './msgTools.js';
 
 const CSS = `
   [data-tkp-nick] { font-size: 0 !important; }
@@ -53,13 +53,8 @@ function panel(el) {
 export function startNicknames() {
   addStyle('tkp-nick-css', CSS);
   setInterval(() => {
-    if (!get('nicknames')) { document.querySelectorAll('[data-tkp-nick]').forEach(e => e.removeAttribute('data-tkp-nick')); return; }
+    if (!get('nicknames')) { document.querySelectorAll('[data-tkp-nick]').forEach(e => e.removeAttribute('data-tkp-nick')); headerAction('nick', null); return; }
     applyNicks();
-    const host = headerHost();
-    if (host && !host.querySelector('.tkp-nick-btn')) {
-      const b = h('button', { class: 'tkp-hdr-btn tkp-nick-btn', title: 'Set a nickname', type: 'button' }, '✏️');
-      b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); openPopover(b, panel, { width: 280 }); });
-      host.appendChild(b);
-    }
+    headerAction('nick', { icon: '✏️', label: 'Set a nickname', order: 3, open: b => openPopover(b, panel, { width: 280 }) });
   }, 800);
 }
