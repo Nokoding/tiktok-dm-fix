@@ -4,6 +4,7 @@ import { get } from '../core/settings.js';
 import { addStyle, removeStyle, h, loadData, saveData, toast } from '../core/util.js';
 import { openPopover } from '../ui/popover.js';
 import { ACCENTS } from './look.js';
+import { headerHost } from './msgTools.js';
 
 export const WALLPAPERS = {
   none: { label: 'None', css: '' },
@@ -101,19 +102,13 @@ function panel(el) {
 }
 
 export function startChatTheme() {
-  addStyle('tkp-ct-css', `.tkp-ct-btn { all: unset; cursor: pointer; margin-left: auto; width: 34px; height: 34px; display: grid;
-    place-items: center; border-radius: 50%; font-size: 17px; } .tkp-ct-btn:hover { background: rgba(255,255,255,.08); }`);
   let lastKey = null;
   setInterval(() => {
-    const nick = document.querySelector('[data-e2e="dm-new-chat-nickname"]');
-    const header = nick && nick.closest('[class*="DivChatHeader"]');
-    const host = header || (nick && nick.parentElement && nick.parentElement.parentElement && nick.parentElement.parentElement.parentElement);
-    if (get('chatThemes') && host && !host.querySelector('.tkp-ct-btn')) {
-      const btn = h('button', { class: 'tkp-ct-btn', title: 'Chat appearance (wallpaper, bubbles)', type: 'button' }, '🎨');
+    const host = get('chatThemes') ? headerHost() : null;
+    if (host && !host.querySelector('.tkp-ct-btn')) {
+      const btn = h('button', { class: 'tkp-hdr-btn tkp-ct-btn', title: 'Chat appearance (wallpaper, bubbles)', type: 'button' }, '🎨');
       btn.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); openPopover(btn, panel, { width: 280 }); });
       host.appendChild(btn);
-      if (getComputedStyle(host).display !== 'flex') host.style.display = 'flex';
-      host.style.alignItems = 'center';
     }
     if (!get('chatThemes')) document.querySelectorAll('.tkp-ct-btn').forEach(b => b.remove());
     const key = chatKey();

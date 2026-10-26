@@ -49,7 +49,7 @@ How the web player works (checked live): feed videos play from in-page `blob:` s
 | Comment blur | Blur comments until hover or click. | DONE |
 | Keyword filter | Hide feed videos whose caption, sound or hashtags match your list. Skip them automatically. | DONE |
 | Download video (no watermark), audio, photo carousels | Read the item's play address from TikTok's page data or React props, fetch the blob, save it with a clean file name. Photo posts save each image. | PLANNED |
-| Mobile layout | Optional narrow, phone-style layout (CSS), covers what TikClient and SideTok do. | PLANNED |
+| Mobile layout | Optional narrow, phone-style layout (CSS), covers what TikClient and SideTok do. | DONE |
 
 ## Part B. DMs: fixes and unlocks
 
@@ -58,7 +58,7 @@ How the web player works (checked live): feed videos play from in-page `blob:` s
 | Enter sends, no lost letters, no ghost text | Native textarea replaces TikTok's Draft.js box. Text flows one way into TikTok. | DONE v1.4 |
 | Photo and video sending | Flip `web_dm_multimedia_msg` to "v2". TikTok's own uploader and cards. | BLOCKED (server refuses web photos on this account) |
 | Group chats on web | Flip `web_dm_group_chat` to "v2". | DONE v1.3 |
-| Unread-only filter, conversation tags | Already half-built in TikTok's web store (`setUnreadOnly`, `getConversationListWithFilter`). Add the UI. | PLANNED |
+| Unread-only filter, conversation tags | Already half-built in TikTok's web store (`setUnreadOnly`, `getConversationListWithFilter`). Add the UI. | DONE (local filter chips) |
 
 ## Part C. DMs: everything the apps have
 
@@ -73,8 +73,8 @@ the live client first (recon harness, milestone 3), then wired up.
 | Native box, auto-grow, Shift+Enter newline | Done in v1.4 | DONE |
 | TikTok emoticons ([happy], [cry] ... 47 of them) | Picker that inserts the text token. TikTok's renderer draws the image. | PLANNED |
 | Stickers: send | STICKER (10002) / sticker card (1805) through the client. Sources: stickers you've received (resend), your favorites, popular stickers if the web client can fetch the store. | BLOCKED (server refuses sticker messages from web) |
-| Sticker favorites and recents | Local, with a "save sticker" action on received stickers. | PLANNED |
-| Custom stickers from your images | Upload through the StickerCreation upload scene, if the server accepts it from web. Otherwise send as an image. | PLANNED |
+| Sticker favorites and recents | Local, with a "save sticker" action on received stickers. | BLOCKED (stickers can't be sent from web) |
+| Custom stickers from your images | Upload through the StickerCreation upload scene, if the server accepts it from web. Otherwise send as an image. | BLOCKED (stickers can't be sent from web) |
 | GIFs | GIPHY search panel (free key, "Powered by GIPHY" shown). Send as a sticker or image message. | BLOCKED (needs media or sticker messages) |
 | Voice messages (hold to talk, 60s) | MediaRecorder, then AUDIO (10006) through the multimedia upload. Transcode if TikTok rejects webm/opus. | BLOCKED (needs media messages) |
 | Quick replies | Saved replies with a manager. Type `/` to search them. Local. | DONE |
@@ -89,19 +89,19 @@ the live client first (recon harness, milestone 3), then wired up.
 | Unsend for everyone | RECALL (50021) through the client. | PLANNED |
 | Pin messages | Message property through the client. If the server refuses it from web: local pins with a pin bar. | PLANNED |
 | Edit message | Local "edited" overlay only, unless the client has a real edit call. | PLANNED |
-| Save / star messages | Local, with a saved-messages panel. | PLANNED |
+| Save / star messages | Local, with a saved-messages panel. | DONE |
 | Translate | Edge's built-in Translator API (on-device). Per message and auto per chat. | DONE |
 | Read status, typing indicator | Read from TikTok's IM store or socket events, show seen ticks and "typing...". | PLANNED |
-| Timestamps on hover, copy text | Local. | PLANNED |
-| Smart / suggested replies | Local suggestions (short canned replies). The app's AI version is server-side. | PLANNED |
+| Timestamps on hover, copy text | Local. | DONE (copy). Timestamps: PLANNED |
+| Smart / suggested replies | Local suggestions (short canned replies). The app's AI version is server-side. | DONE (local suggestions) |
 
 ### Chat
 | Feature | How | Status |
 |---|---|---|
 | Wallpapers (blur, brightness) | Local, per chat, your own images or presets. | DONE |
 | Bubble themes (chat appearance) | Local, per chat. | DONE |
-| Search in chat, media gallery | Index loaded history locally (MiniSearch style), tabs for photos, videos, shared posts. | PLANNED |
-| Nicknames | Local nickname override. | PLANNED |
+| Search in chat, media gallery | Index loaded history locally (MiniSearch style), tabs for photos, videos, shared posts. | DONE (search). Media gallery: PLANNED |
+| Nicknames | Local nickname override. | DONE |
 | Mute | TikTok's own if the client exposes it. Otherwise local notification mute. | PLANNED |
 
 ### Inbox
@@ -114,10 +114,10 @@ the live client first (recon harness, milestone 3), then wired up.
 ### Fun and social (rebuilt locally, visible to you)
 | Feature | How | Status |
 |---|---|---|
-| Streaks | Read TikTok's streak data, show flame counts and an at-risk warning. | PLANNED |
-| Streak pets | Local pet that grows with your streak. | PLANNED |
-| Fortune cookie, greeting cards, games | Local mini cards. Sending them as real messages isn't possible from web, so they render for you only, or go out as plain text or an image. | PLANNED |
-| Nudge | Sends a short preset message or emoticon. Real nudges are app-only. | PLANNED |
+| Streaks | Read TikTok's streak data, show flame counts and an at-risk warning. | DONE (flame counts) |
+| Streak pets | Local pet that grows with your streak. | DONE |
+| Fortune cookie, greeting cards, games | Local mini cards. Sending them as real messages isn't possible from web, so they render for you only, or go out as plain text or an image. | DONE (fortune, cards). Games: NO |
+| Nudge | Sends a short preset message or emoticon. Real nudges are app-only. | DONE (as text) |
 | Voice and video calls | App-only. Out of scope. | NO |
 
 ## Part D. The revamp (make it look like the app, with more life)

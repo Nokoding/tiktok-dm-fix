@@ -17,6 +17,12 @@ import { startQuickReplies } from './features/quickReplies.js';
 import { startChatTheme } from './features/chatTheme.js';
 import { startInboxTools } from './features/inboxTools.js';
 import { startTranslate } from './features/translate.js';
+import { startMsgTools } from './features/msgTools.js';
+import { startChatSearch } from './features/chatSearch.js';
+import { startNicknames } from './features/nicknames.js';
+import { startStreaks } from './features/streaks.js';
+import { startMobileLayout } from './features/mobileLayout.js';
+import { startComposerExtras } from './features/composerExtras.js';
 import { startPanel } from './ui/panel.js';
 
 if (!window.__tkPlus) {
@@ -46,6 +52,12 @@ if (!window.__tkPlus) {
     safe('chatTheme', startChatTheme);
     safe('inboxTools', startInboxTools);
     safe('translate', startTranslate);
+    safe('msgTools', startMsgTools);
+    safe('chatSearch', startChatSearch);
+    safe('nicknames', startNicknames);
+    safe('streaks', startStreaks);
+    safe('mobileLayout', startMobileLayout);
+    safe('composerExtras', startComposerExtras);
     safe('panel', startPanel);
   });
 }
