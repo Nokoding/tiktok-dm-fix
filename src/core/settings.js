@@ -24,6 +24,9 @@ export const SCHEMA = [
   { group: 'Messages', key: 'funExtras', label: 'Fortune cookie, nudge, greeting cards', desc: 'Gift button next to emoji. Fills the box, you send.', type: 'toggle', def: true },
   { group: 'Messages', key: 'streaks', label: 'Streak flames', desc: 'Flame badges with day counts in the inbox.', type: 'toggle', def: true },
   { group: 'Messages', key: 'streakPet', label: 'Streak pets', desc: 'A pet in the chat header that grows with your streak.', type: 'toggle', def: true },
+  { group: 'Messages', key: 'hoverTimes', label: 'Times on hover', desc: 'Hover a message to see when it was sent.', type: 'toggle', def: true },
+  { group: 'Messages', key: 'emoticons', label: 'TikTok emoticons', desc: 'Picker for the app\'s [happy]-style faces, shown as emoji here.', type: 'toggle', def: true },
+  { group: 'Messages', key: 'mediaGallery', label: 'Shared media gallery', desc: 'Picture button in the chat header: posts, photos and links from the chat.', type: 'toggle', def: true },
   { group: 'Messages', key: 'dmLagFix', label: 'Long chat lag fix', desc: 'Off-screen messages stop costing anything while you type.', type: 'toggle', def: true },
 
   { group: 'Playback', key: 'audioWatchdog', label: 'Double audio fix', desc: 'Only one video plays sound. Hidden and off-screen videos get paused.', type: 'toggle', def: true },
@@ -44,6 +47,7 @@ export const SCHEMA = [
     options: [['off', 'Off'], ['clean', 'Clean'], ['ultra', 'Ultra clean']].map(([value, label]) => ({ value, label })) },
   { group: 'Feed', key: 'commentBlur', label: 'Blur comments', desc: 'Comments stay blurred until you hover them.', type: 'toggle', def: false },
   { group: 'Feed', key: 'mobileLayout', label: 'Phone-style layout', desc: 'Narrow, rounded feed in the middle of the screen.', type: 'toggle', def: false },
+  { group: 'Feed', key: 'downloads', label: 'Download button', desc: 'Under the share button: video without watermark, sound, photos. Shift+D saves the video.', type: 'toggle', def: true },
   { group: 'Feed', key: 'keywordFilter', label: 'Keyword filter', desc: 'Comma separated. Matches captions, sounds and usernames.', type: 'text', def: '' },
   { group: 'Feed', key: 'keywordSkip', label: 'Skip filtered videos', desc: 'Jumps past videos that match your keywords.', type: 'toggle', def: true },
   { group: 'Playback', key: 'codecSwap', label: 'Stutter fix (H.264 only)', desc: 'Blocks HEVC so TikTok serves H.264. Try it if videos stutter.', type: 'toggle', def: false, reload: true },

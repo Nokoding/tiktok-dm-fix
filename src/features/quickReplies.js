@@ -4,6 +4,7 @@ import { get } from '../core/settings.js';
 import { addStyle, h, loadData, saveData } from '../core/util.js';
 import { openPopover, closePopover } from '../ui/popover.js';
 import { insertText, activeBox } from './composer.js';
+import { composerSlot } from './msgTools.js';
 
 const DEFAULTS = ['On my way!', 'Haha 😂', 'Sounds good 👍', "Can't talk rn, I'll text you later", 'Love this ❤️'];
 const list = () => loadData('quickReplies', DEFAULTS);
@@ -11,7 +12,7 @@ const save = l => saveData('quickReplies', l);
 
 const CSS = `
   .tkp-qr-btn { all: unset; cursor: pointer; width: 28px; height: 28px; display: grid; place-items: center;
-    border-radius: 50%; font-size: 16px; margin-right: 6px; transition: transform .15s; }
+    border-radius: 50%; font-size: 16px; margin-right: 0; transition: transform .15s; }
   .tkp-qr-btn:hover { transform: scale(1.12); background: rgba(255,255,255,.08); }
 `;
 
@@ -46,14 +47,14 @@ export function startQuickReplies() {
   setInterval(() => {
     if (!get('quickReplies')) { document.querySelectorAll('.tkp-qr-btn').forEach(b => b.remove()); return; }
     for (const emoji of document.querySelectorAll('[data-e2e="dm-new-emoji-btn"]')) {
-      const host = emoji.parentElement;
+      const host = composerSlot(emoji);
       if (!host || host.querySelector('.tkp-qr-btn')) continue;
       const btn = h('button', { class: 'tkp-qr-btn', title: 'Quick replies', type: 'button' }, '⚡');
       btn.addEventListener('click', e => {
         e.preventDefault(); e.stopPropagation();
         openPopover(btn, el => buildList(el, '', t => { closePopover(); insertText(t); }));
       });
-      host.insertBefore(btn, emoji);
+      host.prepend(btn);
     }
   }, 800);
 

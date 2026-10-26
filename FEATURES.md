@@ -48,7 +48,7 @@ How the web player works (checked live): feed videos play from in-page `blob:` s
 | Clean mode / ultra clean | CSS hides side clutter, overlays, promos and hover effects that cause stutter. Levels: off, clean, ultra. | DONE |
 | Comment blur | Blur comments until hover or click. | DONE |
 | Keyword filter | Hide feed videos whose caption, sound or hashtags match your list. Skip them automatically. | DONE |
-| Download video (no watermark), audio, photo carousels | Read the item's play address from TikTok's page data or React props, fetch the blob, save it with a clean file name. Photo posts save each image. | PLANNED |
+| Download video (no watermark), audio, photo carousels | Read the item's play address from TikTok's page data or React props, fetch the blob, save it with a clean file name. Photo posts save each image. | DONE |
 | Mobile layout | Optional narrow, phone-style layout (CSS), covers what TikClient and SideTok do. | DONE |
 
 ## Part B. DMs: fixes and unlocks
@@ -71,7 +71,7 @@ the live client first (recon harness, milestone 3), then wired up.
 | Feature | How | Status |
 |---|---|---|
 | Native box, auto-grow, Shift+Enter newline | Done in v1.4 | DONE |
-| TikTok emoticons ([happy], [cry] ... 47 of them) | Picker that inserts the text token. TikTok's renderer draws the image. | PLANNED |
+| TikTok emoticons ([happy], [cry] ... 47 of them) | Picker that inserts the text token. TikTok's renderer draws the image. | DONE (tokens show as emoji on web) |
 | Stickers: send | STICKER (10002) / sticker card (1805) through the client. Sources: stickers you've received (resend), your favorites, popular stickers if the web client can fetch the store. | BLOCKED (server refuses sticker messages from web) |
 | Sticker favorites and recents | Local, with a "save sticker" action on received stickers. | BLOCKED (stickers can't be sent from web) |
 | Custom stickers from your images | Upload through the StickerCreation upload scene, if the server accepts it from web. Otherwise send as an image. | BLOCKED (stickers can't be sent from web) |
@@ -79,20 +79,20 @@ the live client first (recon harness, milestone 3), then wired up.
 | Voice messages (hold to talk, 60s) | MediaRecorder, then AUDIO (10006) through the multimedia upload. Transcode if TikTok rejects webm/opus. | BLOCKED (needs media messages) |
 | Quick replies | Saved replies with a manager. Type `/` to search them. Local. | DONE |
 | Per-chat drafts | TikTok already keeps drafts. The new box loads them. | DONE |
-| @mentions in groups | Member picker on `@`, mention entities in the text payload. | PLANNED |
+| @mentions in groups | Member picker on `@`, mention entities in the text payload. | NO (not built: drives TikTok's message client) |
 | Reply / quote | TikTok's own, kept working. | DONE |
 
 ### Messages
 | Feature | How | Status |
 |---|---|---|
-| Reactions | TikTok's own on web. Add double-click to heart, quick reaction bar. | PLANNED |
-| Unsend for everyone | RECALL (50021) through the client. | PLANNED |
-| Pin messages | Message property through the client. If the server refuses it from web: local pins with a pin bar. | PLANNED |
-| Edit message | Local "edited" overlay only, unless the client has a real edit call. | PLANNED |
+| Reactions | TikTok's own on web. Add double-click to heart, quick reaction bar. | NO (not built: drives TikTok's message client) |
+| Unsend for everyone | RECALL (50021) through the client. | NO (not built: drives TikTok's message client) |
+| Pin messages | Message property through the client. If the server refuses it from web: local pins with a pin bar. | NO (not built: drives TikTok's message client) |
+| Edit message | Local "edited" overlay only, unless the client has a real edit call. | NO (not built: drives TikTok's message client) |
 | Save / star messages | Local, with a saved-messages panel. | DONE |
 | Translate | Edge's built-in Translator API (on-device). Per message and auto per chat. | DONE |
-| Read status, typing indicator | Read from TikTok's IM store or socket events, show seen ticks and "typing...". | PLANNED |
-| Timestamps on hover, copy text | Local. | DONE (copy). Timestamps: PLANNED |
+| Read status, typing indicator | Read from TikTok's IM store or socket events, show seen ticks and "typing...". | NO (not built: drives TikTok's message client) |
+| Timestamps on hover, copy text | Local. | DONE |
 | Smart / suggested replies | Local suggestions (short canned replies). The app's AI version is server-side. | DONE (local suggestions) |
 
 ### Chat
@@ -100,9 +100,9 @@ the live client first (recon harness, milestone 3), then wired up.
 |---|---|---|
 | Wallpapers (blur, brightness) | Local, per chat, your own images or presets. | DONE |
 | Bubble themes (chat appearance) | Local, per chat. | DONE |
-| Search in chat, media gallery | Index loaded history locally (MiniSearch style), tabs for photos, videos, shared posts. | DONE (search). Media gallery: PLANNED |
+| Search in chat, media gallery | Index loaded history locally (MiniSearch style), tabs for photos, videos, shared posts. | DONE (search, gallery of posts, photos, links) |
 | Nicknames | Local nickname override. | DONE |
-| Mute | TikTok's own if the client exposes it. Otherwise local notification mute. | PLANNED |
+| Mute | TikTok's own if the client exposes it. Otherwise local notification mute. | NO (not built: drives TikTok's message client) |
 
 ### Inbox
 | Feature | How | Status |

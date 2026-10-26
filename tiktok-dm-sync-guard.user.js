@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TikTok Plus
 // @namespace    nokoding
-// @version      2.4.0
+// @version      2.5.0
 // @description  Makes TikTok web better: fixed DM box (Enter sends, no lost letters), photos, videos and group chats in DMs, double audio fix, speed control, background play and more. Settings behind the gear button.
 // @match        https://www.tiktok.com/*
 // @run-at       document-start
@@ -164,6 +164,9 @@
     { group: "Messages", key: "funExtras", label: "Fortune cookie, nudge, greeting cards", desc: "Gift button next to emoji. Fills the box, you send.", type: "toggle", def: true },
     { group: "Messages", key: "streaks", label: "Streak flames", desc: "Flame badges with day counts in the inbox.", type: "toggle", def: true },
     { group: "Messages", key: "streakPet", label: "Streak pets", desc: "A pet in the chat header that grows with your streak.", type: "toggle", def: true },
+    { group: "Messages", key: "hoverTimes", label: "Times on hover", desc: "Hover a message to see when it was sent.", type: "toggle", def: true },
+    { group: "Messages", key: "emoticons", label: "TikTok emoticons", desc: "Picker for the app's [happy]-style faces, shown as emoji here.", type: "toggle", def: true },
+    { group: "Messages", key: "mediaGallery", label: "Shared media gallery", desc: "Picture button in the chat header: posts, photos and links from the chat.", type: "toggle", def: true },
     { group: "Messages", key: "dmLagFix", label: "Long chat lag fix", desc: "Off-screen messages stop costing anything while you type.", type: "toggle", def: true },
     { group: "Playback", key: "audioWatchdog", label: "Double audio fix", desc: "Only one video plays sound. Hidden and off-screen videos get paused.", type: "toggle", def: true },
     { group: "Playback", key: "backgroundPlay", label: "Background play", desc: "Keeps playing when you switch tabs or windows.", type: "toggle", def: false, reload: true, conflicts: "autoPause" },
@@ -204,6 +207,7 @@
     },
     { group: "Feed", key: "commentBlur", label: "Blur comments", desc: "Comments stay blurred until you hover them.", type: "toggle", def: false },
     { group: "Feed", key: "mobileLayout", label: "Phone-style layout", desc: "Narrow, rounded feed in the middle of the screen.", type: "toggle", def: false },
+    { group: "Feed", key: "downloads", label: "Download button", desc: "Under the share button: video without watermark, sound, photos. Shift+D saves the video.", type: "toggle", def: true },
     { group: "Feed", key: "keywordFilter", label: "Keyword filter", desc: "Comma separated. Matches captions, sounds and usernames.", type: "text", def: "" },
     { group: "Feed", key: "keywordSkip", label: "Skip filtered videos", desc: "Jumps past videos that match your keywords.", type: "toggle", def: true },
     { group: "Playback", key: "codecSwap", label: "Stutter fix (H.264 only)", desc: "Blocks HEVC so TikTok serves H.264. Try it if videos stutter.", type: "toggle", def: false, reload: true }
@@ -1336,13 +1340,123 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
     return el;
   }
 
+  // src/features/msgTools.js
+  var CSS8 = `
+  .tkp-mt-btn { all: unset; cursor: pointer; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; font-size: 13px; }
+  .tkp-mt-btn:hover { background: rgba(255,255,255,.1); }
+  .tkp-saved-meta { font-size: 11.5px; opacity: .5; }
+  .tkp-hdr-btn { all: unset; cursor: pointer; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; font-size: 16px; }
+  .tkp-hdr-btn:hover { background: rgba(255,255,255,.08); }
+  .tkp-hdr-spacer { flex: 1; }
+  .tkp-flash { animation: tkp-flash 1.4s ease-out; border-radius: 14px; }
+  @keyframes tkp-flash { 0% { background: rgba(254,44,85,.35); } 100% { background: transparent; } }
+`;
+  var saved = () => loadData("saved", []);
+  var chatHandle = () => {
+    const el = document.querySelector('[data-e2e="chat-uniqueid"]');
+    return el ? el.textContent.trim().replace(/^@/, "") : "";
+  };
+  var chatName = () => {
+    const el = document.querySelector('[data-e2e="dm-new-chat-nickname"]');
+    return el ? el.textContent.trim() : "";
+  };
+  function headerHost() {
+    const nick = document.querySelector('[data-e2e="dm-new-chat-nickname"]');
+    if (!nick) return null;
+    let host = nick.closest('[class*="DivChatHeader"]') || nick.parentElement.parentElement.parentElement;
+    if (host && host.parentElement && /DivChatHeader/.test(String(host.parentElement.className))) host = host.parentElement;
+    if (!host) return null;
+    if (getComputedStyle(host).display !== "flex") {
+      host.style.display = "flex";
+      host.style.alignItems = "center";
+    }
+    if (!host.querySelector(".tkp-hdr-spacer")) host.appendChild(Object.assign(document.createElement("div"), { className: "tkp-hdr-spacer" }));
+    return host;
+  }
+  function savedPanel(el) {
+    const list2 = saved();
+    el.append(h("h5", null, "Saved messages"));
+    if (!list2.length) el.append(h("div", { class: "tkp-hint" }, "Nothing saved yet. Hover a message and press the bookmark."));
+    list2.slice().reverse().forEach((m, ri) => {
+      const i = list2.length - 1 - ri;
+      const row2 = h(
+        "div",
+        { class: "tkp-pop-row", title: "Copy" },
+        h("div", { class: "tkp-grow", style: { whiteSpace: "normal" } }, h("div", null, m.text), h("div", { class: "tkp-saved-meta" }, (m.from === "me" ? "You" : m.chatName || "@" + m.chat) + " · " + new Date(m.at).toLocaleString())),
+        h("button", { class: "tkp-pop-x", title: "Remove", onclick: (e) => {
+          e.stopPropagation();
+          const l = saved();
+          l.splice(i, 1);
+          saveData("saved", l);
+          el.textContent = "";
+          savedPanel(el);
+        } }, "✕")
+      );
+      row2.addEventListener("click", () => {
+        navigator.clipboard.writeText(m.text).then(() => toast("Copied")).catch(() => {
+        });
+      });
+      el.append(row2);
+    });
+  }
+  function startMsgTools() {
+    addStyle("tkp-mt-css", CSS8);
+    setInterval(() => {
+      if (!get("msgTools")) return;
+      for (const item of document.querySelectorAll('[data-e2e="dm-new-chat-item"]')) {
+        const textEl = item.querySelector('[data-e2e="dm-new-message-text"]');
+        const actions = item.querySelector('[class*="DivActions"]');
+        if (!textEl || !actions || actions.querySelector(".tkp-mt-btn")) continue;
+        const copy = h("button", { class: "tkp-mt-btn", title: "Copy text", type: "button" }, "⧉");
+        copy.addEventListener("click", (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          navigator.clipboard.writeText(textEl.textContent.trim()).then(() => toast("Copied")).catch(() => toast("Couldn't copy"));
+        });
+        const save4 = h("button", { class: "tkp-mt-btn", title: "Save message", type: "button" }, "🔖");
+        save4.addEventListener("click", (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          const l = saved();
+          l.push({ text: textEl.textContent.trim(), chat: chatHandle(), chatName: chatName(), from: item.getAttribute("data-tkp-side") || "", at: Date.now() });
+          saveData("saved", l.slice(-500));
+          toast("Saved. Open them with the bookmark button in the chat header.");
+        });
+        actions.prepend(copy, save4);
+      }
+      const host = headerHost();
+      if (host && !host.querySelector(".tkp-saved-btn")) {
+        const b = h("button", { class: "tkp-hdr-btn tkp-saved-btn", title: "Saved messages", type: "button" }, "🔖");
+        b.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openPopover(b, savedPanel, { width: 330 });
+        });
+        host.appendChild(b);
+      }
+    }, 900);
+    void closePopover;
+  }
+  function composerSlot(emoji) {
+    const box = emoji.parentElement, row2 = box && box.parentElement;
+    if (!row2) return null;
+    let slot = row2.querySelector(":scope > .tkp-composer-slot");
+    if (!slot) {
+      slot = document.createElement("span");
+      slot.className = "tkp-composer-slot";
+      slot.style.cssText = "display:flex;align-items:center;gap:2px;flex:none;";
+      row2.insertBefore(slot, box);
+    }
+    return slot;
+  }
+
   // src/features/quickReplies.js
   var DEFAULTS2 = ["On my way!", "Haha 😂", "Sounds good 👍", "Can't talk rn, I'll text you later", "Love this ❤️"];
   var list = () => loadData("quickReplies", DEFAULTS2);
   var save2 = (l) => saveData("quickReplies", l);
-  var CSS8 = `
+  var CSS9 = `
   .tkp-qr-btn { all: unset; cursor: pointer; width: 28px; height: 28px; display: grid; place-items: center;
-    border-radius: 50%; font-size: 16px; margin-right: 6px; transition: transform .15s; }
+    border-radius: 50%; font-size: 16px; margin-right: 0; transition: transform .15s; }
   .tkp-qr-btn:hover { transform: scale(1.12); background: rgba(255,255,255,.08); }
 `;
   function buildList(el, filter2, onPick) {
@@ -1381,14 +1495,14 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
     }
   }
   function startQuickReplies() {
-    addStyle("tkp-qr-css", CSS8);
+    addStyle("tkp-qr-css", CSS9);
     setInterval(() => {
       if (!get("quickReplies")) {
         document.querySelectorAll(".tkp-qr-btn").forEach((b) => b.remove());
         return;
       }
       for (const emoji of document.querySelectorAll('[data-e2e="dm-new-emoji-btn"]')) {
-        const host = emoji.parentElement;
+        const host = composerSlot(emoji);
         if (!host || host.querySelector(".tkp-qr-btn")) continue;
         const btn = h("button", { class: "tkp-qr-btn", title: "Quick replies", type: "button" }, "⚡");
         btn.addEventListener("click", (e) => {
@@ -1399,7 +1513,7 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
             insertText(t);
           }));
         });
-        host.insertBefore(btn, emoji);
+        host.prepend(btn);
       }
     }, 800);
     let slashPop = null;
@@ -1435,103 +1549,6 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
       }
     }, true);
     void activeBox;
-  }
-
-  // src/features/msgTools.js
-  var CSS9 = `
-  .tkp-mt-btn { all: unset; cursor: pointer; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; font-size: 13px; }
-  .tkp-mt-btn:hover { background: rgba(255,255,255,.1); }
-  .tkp-saved-meta { font-size: 11.5px; opacity: .5; }
-  .tkp-hdr-btn { all: unset; cursor: pointer; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; font-size: 16px; }
-  .tkp-hdr-btn:hover { background: rgba(255,255,255,.08); }
-  .tkp-hdr-spacer { flex: 1; }
-  .tkp-flash { animation: tkp-flash 1.4s ease-out; border-radius: 14px; }
-  @keyframes tkp-flash { 0% { background: rgba(254,44,85,.35); } 100% { background: transparent; } }
-`;
-  var saved = () => loadData("saved", []);
-  var chatHandle = () => {
-    const el = document.querySelector('[data-e2e="chat-uniqueid"]');
-    return el ? el.textContent.trim().replace(/^@/, "") : "";
-  };
-  var chatName = () => {
-    const el = document.querySelector('[data-e2e="dm-new-chat-nickname"]');
-    return el ? el.textContent.trim() : "";
-  };
-  function headerHost() {
-    const nick = document.querySelector('[data-e2e="dm-new-chat-nickname"]');
-    if (!nick) return null;
-    const host = nick.closest('[class*="DivChatHeader"]') || nick.parentElement.parentElement.parentElement;
-    if (!host) return null;
-    if (getComputedStyle(host).display !== "flex") {
-      host.style.display = "flex";
-      host.style.alignItems = "center";
-    }
-    if (!host.querySelector(".tkp-hdr-spacer")) host.appendChild(Object.assign(document.createElement("div"), { className: "tkp-hdr-spacer" }));
-    return host;
-  }
-  function savedPanel(el) {
-    const list2 = saved();
-    el.append(h("h5", null, "Saved messages"));
-    if (!list2.length) el.append(h("div", { class: "tkp-hint" }, "Nothing saved yet. Hover a message and press the bookmark."));
-    list2.slice().reverse().forEach((m, ri) => {
-      const i = list2.length - 1 - ri;
-      const row2 = h(
-        "div",
-        { class: "tkp-pop-row", title: "Copy" },
-        h("div", { class: "tkp-grow", style: { whiteSpace: "normal" } }, h("div", null, m.text), h("div", { class: "tkp-saved-meta" }, (m.from === "me" ? "You" : m.chatName || "@" + m.chat) + " · " + new Date(m.at).toLocaleString())),
-        h("button", { class: "tkp-pop-x", title: "Remove", onclick: (e) => {
-          e.stopPropagation();
-          const l = saved();
-          l.splice(i, 1);
-          saveData("saved", l);
-          el.textContent = "";
-          savedPanel(el);
-        } }, "✕")
-      );
-      row2.addEventListener("click", () => {
-        navigator.clipboard.writeText(m.text).then(() => toast("Copied")).catch(() => {
-        });
-      });
-      el.append(row2);
-    });
-  }
-  function startMsgTools() {
-    addStyle("tkp-mt-css", CSS9);
-    setInterval(() => {
-      if (!get("msgTools")) return;
-      for (const item of document.querySelectorAll('[data-e2e="dm-new-chat-item"]')) {
-        const textEl = item.querySelector('[data-e2e="dm-new-message-text"]');
-        const actions = item.querySelector('[class*="DivActions"]');
-        if (!textEl || !actions || actions.querySelector(".tkp-mt-btn")) continue;
-        const copy = h("button", { class: "tkp-mt-btn", title: "Copy text", type: "button" }, "⧉");
-        copy.addEventListener("click", (e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          navigator.clipboard.writeText(textEl.textContent.trim()).then(() => toast("Copied")).catch(() => toast("Couldn't copy"));
-        });
-        const save3 = h("button", { class: "tkp-mt-btn", title: "Save message", type: "button" }, "🔖");
-        save3.addEventListener("click", (e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          const l = saved();
-          l.push({ text: textEl.textContent.trim(), chat: chatHandle(), chatName: chatName(), from: item.getAttribute("data-tkp-side") || "", at: Date.now() });
-          saveData("saved", l.slice(-500));
-          toast("Saved. Open them with the bookmark button in the chat header.");
-        });
-        actions.prepend(copy, save3);
-      }
-      const host = headerHost();
-      if (host && !host.querySelector(".tkp-saved-btn")) {
-        const b = h("button", { class: "tkp-hdr-btn tkp-saved-btn", title: "Saved messages", type: "button" }, "🔖");
-        b.addEventListener("click", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          openPopover(b, savedPanel, { width: 330 });
-        });
-        host.appendChild(b);
-      }
-    }, 900);
-    void closePopover;
   }
 
   // src/features/chatTheme.js
@@ -1941,7 +1958,7 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
       }
       count.textContent = hits.length ? `${cur + 1} of ${hits.length}` : input.value ? "No matches in loaded messages" : "";
     };
-    const run = () => {
+    const run2 = () => {
       clear();
       const q = input.value.trim().toLowerCase();
       hits = q ? [...document.querySelectorAll('[data-e2e="dm-new-chat-item"]')].filter((it) => {
@@ -1952,7 +1969,7 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
       cur = hits.length ? hits.length - 1 : -1;
       show();
     };
-    input.addEventListener("input", run);
+    input.addEventListener("input", run2);
     input.addEventListener("keydown", (e) => {
       e.stopPropagation();
       if (e.key === "Enter" && hits.length) {
@@ -2170,7 +2187,7 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
     border: 1px solid rgba(255,255,255,.1); font: 13px system-ui, sans-serif; color: #eee; }
   .tkp-smart button:hover { border-color: var(--tkp-a, #fe2c55); }
   .tkp-fun-btn { all: unset; cursor: pointer; width: 28px; height: 28px; display: grid; place-items: center;
-    border-radius: 50%; font-size: 16px; margin-right: 6px; } .tkp-fun-btn:hover { background: rgba(255,255,255,.08); }
+    border-radius: 50%; font-size: 16px; } .tkp-fun-btn:hover { background: rgba(255,255,255,.08); }
 `;
   var FORTUNES = [
     "Your next DM will make someone smile.",
@@ -2232,15 +2249,15 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
     setInterval(() => {
       const bottom = document.querySelector('[data-e2e="dm-new-chat-bottom"]');
       for (const emoji of document.querySelectorAll('[data-e2e="dm-new-emoji-btn"]')) {
-        const host = emoji.parentElement;
-        if (!get("funExtras") || !host || host.querySelector(".tkp-fun-btn")) continue;
+        const host = get("funExtras") ? composerSlot(emoji) : null;
+        if (!host || host.querySelector(".tkp-fun-btn")) continue;
         const b = h("button", { class: "tkp-fun-btn", title: "Fortune cookie, nudge, greeting cards", type: "button" }, "🎁");
         b.addEventListener("click", (e) => {
           e.preventDefault();
           e.stopPropagation();
           openPopover(b, funPanel, { width: 250 });
         });
-        host.insertBefore(b, emoji);
+        host.append(b);
       }
       if (!get("funExtras")) document.querySelectorAll(".tkp-fun-btn").forEach((b) => b.remove());
       let bar = document.querySelector(".tkp-smart");
@@ -2265,9 +2282,409 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
     }, 1e3);
   }
 
-  // src/ui/panel.js
-  var VERSION = true ? "2.4.0" : "";
+  // src/features/downloads.js
   var CSS16 = `
+  .tkp-dl-btn { all: unset; cursor: pointer; width: 48px; height: 48px; margin: 8px auto 0; display: grid; place-items: center;
+    border-radius: 50%; background: rgba(255,255,255,.12); font-size: 20px; color: #fff; transition: transform .15s; }
+  html:not([data-theme="dark"]) .tkp-dl-btn { background: rgba(22,24,35,.06); color: #161823; }
+  .tkp-dl-btn:hover { transform: scale(1.08); }
+  .tkp-dl-btn.tkp-busy { opacity: .5; pointer-events: none; }
+`;
+  var clean = (s) => String(s || "").replace(/[\\/:*?"<>|#\n\r\t]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+  var baseName = (it) => [it.author && (it.author.uniqueId || it.author), clean(it.desc) || it.id].filter(Boolean).join(" - ") + " [" + it.id + "]";
+  async function itemById(id, hint) {
+    if (hint && hint.id === String(id) && (hint.imagePost || hint.video && hint.video.playAddr)) return hint;
+    const html = await (await fetch("/@/video/" + id, { credentials: "include" })).text();
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const node = doc.getElementById("__UNIVERSAL_DATA_FOR_REHYDRATION__");
+    const data2 = node && JSON.parse(node.textContent);
+    const it = data2 && data2.__DEFAULT_SCOPE__ && data2.__DEFAULT_SCOPE__["webapp.video-detail"];
+    if (!it || !it.itemInfo) throw new Error("TikTok returned no data for this post");
+    return it.itemInfo.itemStruct;
+  }
+  async function save3(url, name) {
+    const r = await fetch(url, { credentials: "include" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const blob = await r.blob();
+    const a = h("a", { href: URL.createObjectURL(blob), download: name });
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 3e4);
+  }
+  function videoUrl(it) {
+    const v = it.video || {};
+    if (v.playAddr) return v.playAddr;
+    const br = (v.bitrateInfo || []).map((b) => b.PlayAddr && b.PlayAddr.UrlList && b.PlayAddr.UrlList[0]).filter(Boolean);
+    return br[0] || v.downloadAddr || "";
+  }
+  var images = (it) => (it.imagePost && it.imagePost.images || []).map((i) => (i.imageURL && i.imageURL.urlList || [])[0]).filter(Boolean);
+  async function run(kind, id, hint, btn) {
+    if (btn) btn.classList.add("tkp-busy");
+    try {
+      const it = await itemById(id, hint);
+      const name = baseName(it);
+      if (kind === "video") {
+        const u = videoUrl(it);
+        if (!u) throw new Error("no video on this post");
+        toast("Downloading video...");
+        await save3(u, name + ".mp4");
+      } else if (kind === "audio") {
+        const u = it.music && it.music.playUrl;
+        if (!u) throw new Error("no sound on this post");
+        toast("Downloading sound...");
+        await save3(u, clean(it.music.title || "sound") + " - " + clean(it.music.authorName || "") + ".mp3");
+      } else if (kind === "photos") {
+        const list2 = images(it);
+        if (!list2.length) throw new Error("no photos on this post");
+        toast("Downloading " + list2.length + " photo" + (list2.length > 1 ? "s" : "") + "...");
+        for (let i = 0; i < list2.length; i++) await save3(list2[i], name + " (" + (i + 1) + ").jpg");
+      }
+    } catch (e) {
+      toast("Download didn't work: " + (e && e.message ? e.message : "unknown error"));
+    } finally {
+      if (btn) btn.classList.remove("tkp-busy");
+    }
+  }
+  function menu(btn, id, hint) {
+    openPopover(btn, (el) => {
+      el.append(h("h5", null, "Download"));
+      const row2 = (label, kind) => {
+        const r = h("div", { class: "tkp-pop-row" }, label);
+        r.addEventListener("click", () => {
+          closePopover();
+          run(kind, id, hint, btn);
+        });
+        el.append(r);
+      };
+      const photo = hint && hint.imagePost;
+      if (!photo) row2("Video, no watermark", "video");
+      if (photo || !hint) row2("All photos", "photos");
+      row2("Sound (mp3)", "audio");
+    }, { width: 220 });
+  }
+  function postOf(el) {
+    const p = findProps(el, (x) => x.item && x.item.id, 40);
+    if (p) return { id: String(p.item.id), item: p.item };
+    const q = findProps(el, (x) => x.itemId && /^\d{15,}$/.test(String(x.itemId)), 40);
+    if (q) return { id: String(q.itemId), item: null };
+    const wrap = el.closest('article, [data-e2e="recommend-list-item-container"]');
+    const xg = (wrap || document).querySelector('[id^="xgwrapper-"]');
+    const m = xg && xg.id.match(/(\d{15,})$/);
+    return m ? { id: m[1], item: null } : null;
+  }
+  function currentPost() {
+    const m = location.pathname.match(/\/(?:video|photo)\/(\d{15,})/);
+    const v = activeVideo();
+    const fromVideo = v && postOf(v);
+    if (fromVideo) return fromVideo;
+    return m ? { id: m[1], item: null } : null;
+  }
+  function startDownloads() {
+    addStyle("tkp-dl-css", CSS16);
+    setInterval(() => {
+      const on2 = get("downloads");
+      if (!on2) {
+        document.querySelectorAll(".tkp-dl-btn").forEach((b) => b.remove());
+        return;
+      }
+      for (const share of document.querySelectorAll('[data-e2e="share-icon"]')) {
+        const item = share.closest('[class*="DivActionItem"], [class*="ButtonActionItem"]');
+        const bar = item && item.parentElement;
+        const host = bar && (bar.querySelector('[data-e2e="share-icon"]') === share && /Availability/.test(bar.className) ? bar.parentElement : bar);
+        if (!host || host.querySelector(":scope > .tkp-dl-btn")) continue;
+        const btn = h("button", { class: "tkp-dl-btn", type: "button", title: "Download (Shift+D saves the video)" }, "⤓");
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const post = postOf(share);
+          if (!post) {
+            toast("Couldn't find this post's id.");
+            return;
+          }
+          menu(btn, post.id, post.item);
+        });
+        const after = share.closest('[class*="Availability"]') || item;
+        if (after.parentElement === host) after.after(btn);
+        else host.appendChild(btn);
+      }
+    }, 1e3);
+    document.addEventListener("keydown", (e) => {
+      if (!get("downloads") || isTyping(e) || e.ctrlKey || e.altKey || e.metaKey) return;
+      if (e.key === "D" && e.shiftKey) {
+        const post = currentPost();
+        if (!post) return;
+        e.preventDefault();
+        run(post.item && post.item.imagePost ? "photos" : "video", post.id, post.item);
+      }
+    }, true);
+  }
+
+  // src/features/dmExtras.js
+  var EMOTICONS = [
+    ["smile", "🙂"],
+    ["happy", "😊"],
+    ["angry", "😠"],
+    ["cry", "😢"],
+    ["embarrassed", "😳"],
+    ["surprised", "😮"],
+    ["wronged", "🥺"],
+    ["shout", "😫"],
+    ["flushed", "😳"],
+    ["yummy", "😋"],
+    ["complacent", "😌"],
+    ["drool", "🤤"],
+    ["scream", "😱"],
+    ["weep", "😭"],
+    ["speechless", "😶"],
+    ["funnyface", "🤪"],
+    ["laughwithtears", "😂"],
+    ["wicked", "😏"],
+    ["facewithrollingeyes", "🙄"],
+    ["sulk", "😒"],
+    ["thinking", "🤔"],
+    ["lovely", "🥰"],
+    ["greedy", "🤑"],
+    ["wow", "🤩"],
+    ["joyful", "😁"],
+    ["hehe", "😆"],
+    ["slap", "🤚"],
+    ["tears", "🥲"],
+    ["stun", "😵"],
+    ["cute", "😚"],
+    ["blink", "😉"],
+    ["disdain", "😑"],
+    ["astonish", "😲"],
+    ["rage", "😡"],
+    ["cool", "😎"],
+    ["excited", "🤗"],
+    ["proud", "😤"],
+    ["smileface", "😃"],
+    ["evil", "😈"],
+    ["angel", "😇"],
+    ["laugh", "😄"],
+    ["pride", "🫡"],
+    ["nap", "😴"],
+    ["loveface", "😍"],
+    ["awkward", "😅"],
+    ["shock", "🫨"],
+    ["funny", "🤭"]
+  ];
+  var EMO = new Map(EMOTICONS);
+  var EMO_RE = new RegExp("\\[(" + EMOTICONS.map((e) => e[0]).join("|") + ")\\]", "g");
+  var CSS17 = `
+  [data-e2e="dm-new-chat-item"] { position: relative; }
+  .tkp-ts { position: absolute; top: 50%; transform: translateY(-50%); font: 600 11px/1 system-ui, sans-serif;
+    opacity: 0; pointer-events: none; transition: opacity .12s; color: rgba(255,255,255,.55); white-space: nowrap; z-index: 2; }
+  html:not([data-theme="dark"]) .tkp-ts { color: rgba(22,24,35,.5); }
+  [data-e2e="dm-new-chat-item"]:hover > .tkp-ts { opacity: 1; }
+  .tkp-ts.tkp-left { left: 10px; } .tkp-ts.tkp-right { right: 10px; }
+  .tkp-emo-btn { all: unset; cursor: pointer; width: 28px; height: 28px; display: grid; place-items: center;
+    border-radius: 50%; font: 700 12px/1 system-ui, sans-serif; opacity: .85; }
+  .tkp-emo-btn:hover { background: rgba(255,255,255,.08); opacity: 1; }
+  .tkp-emo-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; }
+  .tkp-emo-grid button { all: unset; cursor: pointer; display: grid; place-items: center; height: 40px; border-radius: 10px; font-size: 22px; }
+  .tkp-emo-grid button:hover { background: rgba(255,255,255,.1); }
+  .tkp-gal-tabs { display: flex; gap: 6px; margin: 0 4px 8px; }
+  .tkp-gal-tabs button { all: unset; cursor: pointer; padding: 5px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; background: #2a2a33; }
+  .tkp-gal-tabs button.tkp-on { background: var(--tkp-a, #fe2c55); }
+  .tkp-gal-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .tkp-gal-grid a { position: relative; display: block; aspect-ratio: 3/4; border-radius: 10px; overflow: hidden; background: #22222a; }
+  .tkp-gal-grid img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .tkp-gal-grid span { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 6px 5px; font-size: 11px; line-height: 1.2;
+    background: linear-gradient(transparent, rgba(0,0,0,.75)); color: #fff; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .tkp-gal-link { display: block; padding: 8px; border-radius: 10px; color: inherit; text-decoration: none; word-break: break-all; font-size: 13px; }
+  .tkp-gal-link:hover { background: rgba(255,255,255,.08); }
+`;
+  function msgOf(item) {
+    let f = fiberOf(item);
+    for (let n = 0; f && n < 6; n++, f = f.return) {
+      let s = f.memoizedState, i = 0;
+      while (s && i < 40) {
+        const m = s.memoizedState;
+        for (const c of [m, m && m[0]]) if (c && typeof c === "object" && c.clientId && c.createdAt) return c;
+        s = s.next;
+        i++;
+      }
+    }
+    return null;
+  }
+  var contentOf = (m) => {
+    let c = m.content;
+    if (typeof c === "string") {
+      try {
+        c = JSON.parse(c);
+      } catch (e) {
+        c = { text: c };
+      }
+    }
+    return c || {};
+  };
+  function fmtTime(d) {
+    const now = /* @__PURE__ */ new Date();
+    const t = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    if (d.toDateString() === now.toDateString()) return t;
+    const y = new Date(now);
+    y.setDate(now.getDate() - 1);
+    if (d.toDateString() === y.toDateString()) return "Yesterday " + t;
+    return d.toLocaleDateString([], { month: "short", day: "numeric", year: d.getFullYear() === now.getFullYear() ? void 0 : "numeric" }) + ", " + t;
+  }
+  function timestamps() {
+    for (const item of document.querySelectorAll('[data-e2e="dm-new-chat-item"]')) {
+      if (item.querySelector(":scope > .tkp-ts")) continue;
+      const m = msgOf(item);
+      if (!m) continue;
+      const d = m.createdAt instanceof Date ? m.createdAt : new Date(m.createdAt);
+      if (isNaN(d)) continue;
+      const mine = m.isFromMe || item.getAttribute("data-tkp-side") === "me";
+      const el = h("span", { class: "tkp-ts " + (mine ? "tkp-left" : "tkp-right") }, fmtTime(d));
+      item.appendChild(el);
+      item.title = d.toLocaleString();
+    }
+  }
+  function renderEmoticons() {
+    for (const t of document.querySelectorAll('[data-e2e="dm-new-message-text"], [data-e2e="dm-new-conversation-item"] p')) {
+      const walker = document.createTreeWalker(t, NodeFilter.SHOW_TEXT);
+      let n;
+      while (n = walker.nextNode()) {
+        if (n.nodeValue.indexOf("[") < 0) continue;
+        const v = n.nodeValue.replace(EMO_RE, (all2, k) => EMO.get(k) || all2);
+        if (v !== n.nodeValue) n.nodeValue = v;
+      }
+    }
+  }
+  function emoticonPicker(el) {
+    el.append(h("h5", null, "TikTok emoticons"));
+    const grid = h("div", { class: "tkp-emo-grid" });
+    for (const [k, e] of EMOTICONS) {
+      const b = h("button", { type: "button", title: "[" + k + "]" }, e);
+      b.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        if (!ev.shiftKey) closePopover();
+        insertText("[" + k + "]");
+      });
+      grid.append(b);
+    }
+    el.append(grid, h("div", { class: "tkp-hint" }, "Sends the [token]. The TikTok app shows it as its own animated face. Shift-click to add several."));
+  }
+  function galleryData() {
+    const posts = [], links = [], photos = [], seen2 = /* @__PURE__ */ new Set();
+    for (const item of document.querySelectorAll('[data-e2e="dm-new-chat-item"]')) {
+      const m = msgOf(item);
+      if (!m || m.isRecalled) continue;
+      const c = contentOf(m);
+      if (c.itemId && !seen2.has(c.itemId)) {
+        seen2.add(c.itemId);
+        const cover = c.cover_url && c.cover_url.url_list && c.cover_url.url_list[0];
+        posts.push({ id: c.itemId, cover, title: c.content_title || c.content_name || "", item });
+      }
+      if (m.pictureUrl) photos.push({ src: typeof m.pictureUrl === "string" ? m.pictureUrl : (m.pictureUrl.url_list || [])[0], item });
+      const text = c.text || "";
+      for (const u of text.match(/https?:\/\/[^\s<>"]+/g) || []) links.push({ url: u, item });
+    }
+    return { posts, links, photos };
+  }
+  function gallery(el) {
+    const data2 = galleryData();
+    const tabs = h("div", { class: "tkp-gal-tabs" });
+    const body = h("div");
+    const jump = (item) => {
+      closePopover();
+      item.scrollIntoView({ block: "center", behavior: "smooth" });
+      item.classList.add("tkp-flash");
+      setTimeout(() => item.classList.remove("tkp-flash"), 1500);
+    };
+    const show = (which) => {
+      [...tabs.children].forEach((b) => b.classList.toggle("tkp-on", b.dataset.k === which));
+      body.textContent = "";
+      if (which === "posts") {
+        if (!data2.posts.length) body.append(h("div", { class: "tkp-hint" }, "No shared posts in the loaded part of this chat. Scroll up to load older messages."));
+        const g = h("div", { class: "tkp-gal-grid" });
+        for (const p of data2.posts.slice().reverse()) {
+          const a = h(
+            "a",
+            { href: "/@/video/" + p.id, target: "_blank", rel: "noopener", title: p.title },
+            p.cover ? h("img", { src: p.cover, loading: "lazy", referrerpolicy: "no-referrer", alt: "" }) : null,
+            p.title ? h("span", null, p.title) : null
+          );
+          a.addEventListener("contextmenu", (e) => {
+            e.preventDefault();
+            jump(p.item);
+          });
+          g.append(a);
+        }
+        body.append(g);
+        if (data2.posts.length) body.append(h("div", { class: "tkp-hint" }, "Click opens the post. Right-click jumps to it in the chat."));
+      } else if (which === "photos") {
+        if (!data2.photos.length) body.append(h("div", { class: "tkp-hint" }, "No photos in the loaded part of this chat."));
+        const g = h("div", { class: "tkp-gal-grid" });
+        for (const p of data2.photos.slice().reverse()) {
+          const a = h("a", { href: p.src, target: "_blank", rel: "noopener" }, h("img", { src: p.src, loading: "lazy", alt: "" }));
+          a.addEventListener("contextmenu", (e) => {
+            e.preventDefault();
+            jump(p.item);
+          });
+          g.append(a);
+        }
+        body.append(g);
+      } else {
+        if (!data2.links.length) body.append(h("div", { class: "tkp-hint" }, "No links in the loaded part of this chat."));
+        for (const l of data2.links.slice().reverse()) {
+          const a = h("a", { class: "tkp-gal-link", href: l.url, target: "_blank", rel: "noopener noreferrer" }, l.url);
+          a.addEventListener("contextmenu", (e) => {
+            e.preventDefault();
+            jump(l.item);
+          });
+          body.append(a);
+        }
+      }
+    };
+    for (const [k, label] of [["posts", "Posts " + data2.posts.length], ["photos", "Photos " + data2.photos.length], ["links", "Links " + data2.links.length]]) {
+      const b = h("button", { type: "button", "data-k": k }, label);
+      b.addEventListener("click", () => show(k));
+      tabs.append(b);
+    }
+    el.append(h("h5", null, "Shared in this chat"), tabs, body);
+    show("posts");
+  }
+  function startDmExtras() {
+    addStyle("tkp-dmx-css", CSS17);
+    setInterval(() => {
+      if (!location.pathname.startsWith("/messages")) return;
+      if (get("hoverTimes")) timestamps();
+      else document.querySelectorAll(".tkp-ts").forEach((x) => x.remove());
+      if (get("emoticons")) {
+        renderEmoticons();
+        for (const emoji of document.querySelectorAll('[data-e2e="dm-new-emoji-btn"]')) {
+          const slot = composerSlot(emoji);
+          if (!slot || slot.querySelector(".tkp-emo-btn")) continue;
+          const b = h("button", { class: "tkp-emo-btn", type: "button", title: "TikTok emoticons" }, "[:)]");
+          b.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openPopover(b, emoticonPicker, { width: 300 });
+          });
+          slot.append(b);
+        }
+      } else document.querySelectorAll(".tkp-emo-btn").forEach((x) => x.remove());
+      const host = get("mediaGallery") ? headerHost() : null;
+      if (host && !host.querySelector(".tkp-gal-btn")) {
+        const b = h("button", { class: "tkp-hdr-btn tkp-gal-btn", type: "button", title: "Shared posts, photos and links" }, "🖼");
+        b.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openPopover(b, gallery, { width: 340 });
+        });
+        host.appendChild(b);
+      }
+      if (!get("mediaGallery")) document.querySelectorAll(".tkp-gal-btn").forEach((x) => x.remove());
+    }, 900);
+    void toast;
+  }
+
+  // src/ui/panel.js
+  var VERSION = true ? "2.5.0" : "";
+  var CSS18 = `
   .tkp-gear { position: fixed; z-index: 2147483001; left: 14px; bottom: 14px; width: 40px; height: 40px;
     border-radius: 50%; border: 1px solid rgba(255,255,255,.14); cursor: pointer;
     background: linear-gradient(135deg, rgba(254,44,85,.9), rgba(37,244,238,.75));
@@ -2445,7 +2862,7 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
     document.body.appendChild(overlay);
   }
   function startPanel() {
-    addStyle("tkp-panel-css", CSS16);
+    addStyle("tkp-panel-css", CSS18);
     const gear = h("button", { class: "tkp-gear", title: "TikTok Plus settings", "aria-label": "TikTok Plus settings", onclick: openPanel }, "⚙");
     const mount = () => {
       if (document.body && !gear.isConnected) document.body.appendChild(gear);
@@ -2456,7 +2873,7 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
 
   // src/main.js
   if (!window.__tkPlus) {
-    window.__tkPlus = { version: true ? "2.4.0" : "" };
+    window.__tkPlus = { version: true ? "2.5.0" : "" };
     window.__tkDmSyncGuard12 = window.__tkDmSyncGuard13 = window.__tkDmSyncGuard14 = true;
     safe("flags", installFlags);
     safe("codecSwap", installCodecSwap);
@@ -2483,6 +2900,8 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
       safe("streaks", startStreaks);
       safe("mobileLayout", startMobileLayout);
       safe("composerExtras", startComposerExtras);
+      safe("downloads", startDownloads);
+      safe("dmExtras", startDmExtras);
       safe("panel", startPanel);
     });
   }

@@ -23,7 +23,9 @@ const chatName = () => { const el = document.querySelector('[data-e2e="dm-new-ch
 export function headerHost() {
   const nick = document.querySelector('[data-e2e="dm-new-chat-nickname"]');
   if (!nick) return null;
-  const host = nick.closest('[class*="DivChatHeader"]') || nick.parentElement.parentElement.parentElement;
+  let host = nick.closest('[class*="DivChatHeader"]') || nick.parentElement.parentElement.parentElement;
+  // The inner content wrapper also matches; the full-width header row is its parent.
+  if (host && host.parentElement && /DivChatHeader/.test(String(host.parentElement.className))) host = host.parentElement;
   if (!host) return null;
   if (getComputedStyle(host).display !== 'flex') { host.style.display = 'flex'; host.style.alignItems = 'center'; }
   if (!host.querySelector('.tkp-hdr-spacer')) host.appendChild(Object.assign(document.createElement('div'), { className: 'tkp-hdr-spacer' }));
@@ -75,4 +77,18 @@ export function startMsgTools() {
     }
   }, 900);
   void closePopover;
+}
+
+// A shared row for our buttons in the message box, right before TikTok's emoji button.
+export function composerSlot(emoji) {
+  const box = emoji.parentElement, row = box && box.parentElement;
+  if (!row) return null;
+  let slot = row.querySelector(':scope > .tkp-composer-slot');
+  if (!slot) {
+    slot = document.createElement('span');
+    slot.className = 'tkp-composer-slot';
+    slot.style.cssText = 'display:flex;align-items:center;gap:2px;flex:none;';
+    row.insertBefore(slot, box);
+  }
+  return slot;
 }

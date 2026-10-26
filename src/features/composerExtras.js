@@ -4,6 +4,7 @@ import { get } from '../core/settings.js';
 import { addStyle, h } from '../core/util.js';
 import { insertText } from './composer.js';
 import { openPopover, closePopover } from '../ui/popover.js';
+import { composerSlot } from './msgTools.js';
 
 const CSS = `
   .tkp-smart { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 12px 6px; }
@@ -11,7 +12,7 @@ const CSS = `
     border: 1px solid rgba(255,255,255,.1); font: 13px system-ui, sans-serif; color: #eee; }
   .tkp-smart button:hover { border-color: var(--tkp-a, #fe2c55); }
   .tkp-fun-btn { all: unset; cursor: pointer; width: 28px; height: 28px; display: grid; place-items: center;
-    border-radius: 50%; font-size: 16px; margin-right: 6px; } .tkp-fun-btn:hover { background: rgba(255,255,255,.08); }
+    border-radius: 50%; font-size: 16px; } .tkp-fun-btn:hover { background: rgba(255,255,255,.08); }
 `;
 
 const FORTUNES = [
@@ -66,11 +67,11 @@ export function startComposerExtras() {
     const bottom = document.querySelector('[data-e2e="dm-new-chat-bottom"]');
     // Fun button
     for (const emoji of document.querySelectorAll('[data-e2e="dm-new-emoji-btn"]')) {
-      const host = emoji.parentElement;
-      if (!get('funExtras') || !host || host.querySelector('.tkp-fun-btn')) continue;
+      const host = get('funExtras') ? composerSlot(emoji) : null;
+      if (!host || host.querySelector('.tkp-fun-btn')) continue;
       const b = h('button', { class: 'tkp-fun-btn', title: 'Fortune cookie, nudge, greeting cards', type: 'button' }, '🎁');
       b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); openPopover(b, funPanel, { width: 250 }); });
-      host.insertBefore(b, emoji);
+      host.append(b);
     }
     if (!get('funExtras')) document.querySelectorAll('.tkp-fun-btn').forEach(b => b.remove());
     // Smart replies

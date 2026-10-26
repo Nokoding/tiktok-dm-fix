@@ -23,6 +23,8 @@ import { startNicknames } from './features/nicknames.js';
 import { startStreaks } from './features/streaks.js';
 import { startMobileLayout } from './features/mobileLayout.js';
 import { startComposerExtras } from './features/composerExtras.js';
+import { startDownloads } from './features/downloads.js';
+import { startDmExtras } from './features/dmExtras.js';
 import { startPanel } from './ui/panel.js';
 
 if (!window.__tkPlus) {
@@ -58,6 +60,8 @@ if (!window.__tkPlus) {
     safe('streaks', startStreaks);
     safe('mobileLayout', startMobileLayout);
     safe('composerExtras', startComposerExtras);
+    safe('downloads', startDownloads);
+    safe('dmExtras', startDmExtras);
     safe('panel', startPanel);
   });
 }
