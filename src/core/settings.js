@@ -10,6 +10,13 @@ export const SCHEMA = [
   { group: 'Look', key: 'appLook', label: 'App-style look', desc: 'Gradient bubbles that group like the app, pill message box, livelier inbox.', type: 'toggle', def: true },
   { group: 'Look', key: 'accent', label: 'Accent color', desc: 'Your bubbles, the send button and highlights.', type: 'select', def: 'tiktok',
     options: [['tiktok', 'TikTok (pink and cyan)'], ['neon', 'Neon (purple and pink)'], ['ocean', 'Ocean (blue)'], ['sunset', 'Sunset (orange)'], ['mint', 'Mint (green)'], ['classic', 'Classic TikTok blue']].map(([value, label]) => ({ value, label })) },
+  { group: 'Messages', key: 'quickReplies', label: 'Quick replies', desc: 'Saved replies behind the lightning button. Type / in the box to search them.', type: 'toggle', def: true },
+  { group: 'Messages', key: 'chatThemes', label: 'Chat wallpapers and bubble colors', desc: 'Paint button in the chat header. Per chat, saved on this device.', type: 'toggle', def: true },
+  { group: 'Messages', key: 'inboxTools', label: 'Inbox search, filters, pins and archive', desc: 'Pins and archive are saved on this device.', type: 'toggle', def: true },
+  { group: 'Messages', key: 'translate', label: 'Translate button', desc: "Uses the browser's built-in translator, on your device.", type: 'toggle', def: true },
+  { group: 'Messages', key: 'autoTranslate', label: 'Auto-translate incoming messages', desc: 'Only translates messages not already in your language.', type: 'toggle', def: false },
+  { group: 'Messages', key: 'translateTo', label: 'Translate into', type: 'select', def: 'en',
+    options: [['en', 'English'], ['es', 'Spanish'], ['fr', 'French'], ['pt', 'Portuguese'], ['de', 'German'], ['it', 'Italian'], ['ja', 'Japanese'], ['ko', 'Korean'], ['zh', 'Chinese'], ['ar', 'Arabic'], ['hi', 'Hindi'], ['ru', 'Russian']].map(([value, label]) => ({ value, label })) },
   { group: 'Messages', key: 'dmLagFix', label: 'Long chat lag fix', desc: 'Off-screen messages stop costing anything while you type.', type: 'toggle', def: true },
 
   { group: 'Playback', key: 'audioWatchdog', label: 'Double audio fix', desc: 'Only one video plays sound. Hidden and off-screen videos get paused.', type: 'toggle', def: true },

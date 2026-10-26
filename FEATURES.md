@@ -22,7 +22,8 @@ Ground rules:
 - Features TikTok's servers can't do are rebuilt locally and stored on your device.
 - Every feature can be switched off in the settings panel.
 
-Status key: DONE / NEXT (current milestone) / PLANNED.
+Status key: DONE / PLANNED / BLOCKED (TikTok's server refuses it from the web) / NO.
+Server tests from Oct 26 2026 are in docs/im-api.md.
 
 ---
 
@@ -33,20 +34,20 @@ How the web player works (checked live): feed videos play from in-page `blob:` s
 
 | Feature | How | Status |
 |---|---|---|
-| Double audio fix ("zombie watchdog") | Pause every `<video>` that is off screen, detached or not the active one. Watch with IntersectionObserver plus a 1s check. | NEXT |
-| HEVC codec swap (stutter fix) | At document-start, make `MediaSource.isTypeSupported` and `canPlayType` say no to `hvc1`/`hev1`, so TikTok serves H.264. Toggle, off by default (Edge plays HEVC fine on most PCs). | NEXT |
-| Long DM chat lag fix | CSS `content-visibility: auto` plus `contain-intrinsic-size` on message rows, so off-screen messages cost nothing while you type. | NEXT |
-| Background play | Make `document.hidden`/`visibilityState` read "visible" and swallow `visibilitychange`/`blur` pauses, only while the toggle is on. | NEXT |
-| Auto-pause on tab switch | The opposite toggle: pause when the tab hides, resume when it comes back. | NEXT |
-| Playback speed 0.25x to 4x | Speed pill on the player. Re-apply on every new video (`play`, `loadedmetadata`, `ratechange`). Shortcut keys. | NEXT |
-| Picture-in-Picture | PiP button on the player. Auto-PiP when you scroll away or switch tabs, where Edge allows it. | PLANNED |
-| Equalizer presets | Web Audio chain per video: BiquadFilter bank (bass boost, vocal, treble, flat, custom 10-band). | PLANNED |
-| Volume normalization | DynamicsCompressor plus gain in the same chain. | PLANNED |
-| 8D / 360 audio | StereoPanner (or PannerNode) swept slowly, with a little reverb. | PLANNED |
-| Auto scroll | When a video ends, go to the next one (TikTok's own next control or ArrowDown). | PLANNED |
-| Clean mode / ultra clean | CSS hides side clutter, overlays, promos and hover effects that cause stutter. Levels: off, clean, ultra. | PLANNED |
-| Comment blur | Blur comments until hover or click. | PLANNED |
-| Keyword filter | Hide feed videos whose caption, sound or hashtags match your list. Skip them automatically. | PLANNED |
+| Double audio fix ("zombie watchdog") | Pause every `<video>` that is off screen, detached or not the active one. Watch with IntersectionObserver plus a 1s check. | DONE |
+| HEVC codec swap (stutter fix) | At document-start, make `MediaSource.isTypeSupported` and `canPlayType` say no to `hvc1`/`hev1`, so TikTok serves H.264. Toggle, off by default (Edge plays HEVC fine on most PCs). | DONE |
+| Long DM chat lag fix | CSS `content-visibility: auto` plus `contain-intrinsic-size` on message rows, so off-screen messages cost nothing while you type. | DONE |
+| Background play | Make `document.hidden`/`visibilityState` read "visible" and swallow `visibilitychange`/`blur` pauses, only while the toggle is on. | DONE |
+| Auto-pause on tab switch | The opposite toggle: pause when the tab hides, resume when it comes back. | DONE |
+| Playback speed 0.25x to 4x | Speed pill on the player. Re-apply on every new video (`play`, `loadedmetadata`, `ratechange`). Shortcut keys. | DONE |
+| Picture-in-Picture | PiP button on the player. Auto-PiP when you scroll away or switch tabs, where Edge allows it. | DONE |
+| Equalizer presets | Web Audio chain per video: BiquadFilter bank (bass boost, vocal, treble, flat, custom 10-band). | DONE |
+| Volume normalization | DynamicsCompressor plus gain in the same chain. | DONE |
+| 8D / 360 audio | StereoPanner (or PannerNode) swept slowly, with a little reverb. | DONE |
+| Auto scroll | When a video ends, go to the next one (TikTok's own next control or ArrowDown). | DONE |
+| Clean mode / ultra clean | CSS hides side clutter, overlays, promos and hover effects that cause stutter. Levels: off, clean, ultra. | DONE |
+| Comment blur | Blur comments until hover or click. | DONE |
+| Keyword filter | Hide feed videos whose caption, sound or hashtags match your list. Skip them automatically. | DONE |
 | Download video (no watermark), audio, photo carousels | Read the item's play address from TikTok's page data or React props, fetch the blob, save it with a clean file name. Photo posts save each image. | PLANNED |
 | Mobile layout | Optional narrow, phone-style layout (CSS), covers what TikClient and SideTok do. | PLANNED |
 
@@ -55,7 +56,7 @@ How the web player works (checked live): feed videos play from in-page `blob:` s
 | Feature | How | Status |
 |---|---|---|
 | Enter sends, no lost letters, no ghost text | Native textarea replaces TikTok's Draft.js box. Text flows one way into TikTok. | DONE v1.4 |
-| Photo and video sending | Flip `web_dm_multimedia_msg` to "v2". TikTok's own uploader and cards. | DONE v1.3 |
+| Photo and video sending | Flip `web_dm_multimedia_msg` to "v2". TikTok's own uploader and cards. | BLOCKED (server refuses web photos on this account) |
 | Group chats on web | Flip `web_dm_group_chat` to "v2". | DONE v1.3 |
 | Unread-only filter, conversation tags | Already half-built in TikTok's web store (`setUnreadOnly`, `getConversationListWithFilter`). Add the UI. | PLANNED |
 
@@ -71,12 +72,12 @@ the live client first (recon harness, milestone 3), then wired up.
 |---|---|---|
 | Native box, auto-grow, Shift+Enter newline | Done in v1.4 | DONE |
 | TikTok emoticons ([happy], [cry] ... 47 of them) | Picker that inserts the text token. TikTok's renderer draws the image. | PLANNED |
-| Stickers: send | STICKER (10002) / sticker card (1805) through the client. Sources: stickers you've received (resend), your favorites, popular stickers if the web client can fetch the store. | PLANNED |
+| Stickers: send | STICKER (10002) / sticker card (1805) through the client. Sources: stickers you've received (resend), your favorites, popular stickers if the web client can fetch the store. | BLOCKED (server refuses sticker messages from web) |
 | Sticker favorites and recents | Local, with a "save sticker" action on received stickers. | PLANNED |
 | Custom stickers from your images | Upload through the StickerCreation upload scene, if the server accepts it from web. Otherwise send as an image. | PLANNED |
-| GIFs | GIPHY search panel (free key, "Powered by GIPHY" shown). Send as a sticker or image message. | PLANNED |
-| Voice messages (hold to talk, 60s) | MediaRecorder, then AUDIO (10006) through the multimedia upload. Transcode if TikTok rejects webm/opus. | PLANNED |
-| Quick replies | Saved replies with a manager. Type `/` to search them. Local. | PLANNED |
+| GIFs | GIPHY search panel (free key, "Powered by GIPHY" shown). Send as a sticker or image message. | BLOCKED (needs media or sticker messages) |
+| Voice messages (hold to talk, 60s) | MediaRecorder, then AUDIO (10006) through the multimedia upload. Transcode if TikTok rejects webm/opus. | BLOCKED (needs media messages) |
+| Quick replies | Saved replies with a manager. Type `/` to search them. Local. | DONE |
 | Per-chat drafts | TikTok already keeps drafts. The new box loads them. | DONE |
 | @mentions in groups | Member picker on `@`, mention entities in the text payload. | PLANNED |
 | Reply / quote | TikTok's own, kept working. | DONE |
@@ -89,7 +90,7 @@ the live client first (recon harness, milestone 3), then wired up.
 | Pin messages | Message property through the client. If the server refuses it from web: local pins with a pin bar. | PLANNED |
 | Edit message | Local "edited" overlay only, unless the client has a real edit call. | PLANNED |
 | Save / star messages | Local, with a saved-messages panel. | PLANNED |
-| Translate | Edge's built-in Translator API (on-device). Per message and auto per chat. | PLANNED |
+| Translate | Edge's built-in Translator API (on-device). Per message and auto per chat. | DONE |
 | Read status, typing indicator | Read from TikTok's IM store or socket events, show seen ticks and "typing...". | PLANNED |
 | Timestamps on hover, copy text | Local. | PLANNED |
 | Smart / suggested replies | Local suggestions (short canned replies). The app's AI version is server-side. | PLANNED |
@@ -97,8 +98,8 @@ the live client first (recon harness, milestone 3), then wired up.
 ### Chat
 | Feature | How | Status |
 |---|---|---|
-| Wallpapers (blur, brightness) | Local, per chat, your own images or presets. | PLANNED |
-| Bubble themes (chat appearance) | Local, per chat. | PLANNED |
+| Wallpapers (blur, brightness) | Local, per chat, your own images or presets. | DONE |
+| Bubble themes (chat appearance) | Local, per chat. | DONE |
 | Search in chat, media gallery | Index loaded history locally (MiniSearch style), tabs for photos, videos, shared posts. | PLANNED |
 | Nicknames | Local nickname override. | PLANNED |
 | Mute | TikTok's own if the client exposes it. Otherwise local notification mute. | PLANNED |
@@ -106,9 +107,9 @@ the live client first (recon harness, milestone 3), then wired up.
 ### Inbox
 | Feature | How | Status |
 |---|---|---|
-| Filters (unread, groups, requests, starred) | TikTok's half-built filter plus local tags. | PLANNED |
-| Pin chats to top, archive, star | Local. | PLANNED |
-| Inbox search | Local over loaded conversations. | PLANNED |
+| Filters (unread, groups, requests, starred) | TikTok's half-built filter plus local tags. | DONE (unread, pinned, archived chips) |
+| Pin chats to top, archive, star | Local. | DONE |
+| Inbox search | Local over loaded conversations. | DONE |
 
 ### Fun and social (rebuilt locally, visible to you)
 | Feature | How | Status |

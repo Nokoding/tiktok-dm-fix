@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TikTok Plus
 // @namespace    nokoding
-// @version      2.2.0
+// @version      2.3.0
 // @description  Makes TikTok web better: fixed DM box (Enter sends, no lost letters), photos, videos and group chats in DMs, double audio fix, speed control, background play and more. Settings behind the gear button.
 // @match        https://www.tiktok.com/*
 // @run-at       document-start
@@ -111,6 +111,22 @@
     document.body.appendChild(el);
     setTimeout(() => el.remove(), ms);
   }
+  function loadData(key, def) {
+    try {
+      const raw = localStorage.getItem("tkplus:data:" + key);
+      return raw ? JSON.parse(raw) : def;
+    } catch (e) {
+      return def;
+    }
+  }
+  function saveData(key, val) {
+    try {
+      localStorage.setItem("tkplus:data:" + key, JSON.stringify(val));
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
 
   // src/core/settings.js
   var KEY = "tkplus:settings:v1";
@@ -127,6 +143,19 @@
       type: "select",
       def: "tiktok",
       options: [["tiktok", "TikTok (pink and cyan)"], ["neon", "Neon (purple and pink)"], ["ocean", "Ocean (blue)"], ["sunset", "Sunset (orange)"], ["mint", "Mint (green)"], ["classic", "Classic TikTok blue"]].map(([value, label]) => ({ value, label }))
+    },
+    { group: "Messages", key: "quickReplies", label: "Quick replies", desc: "Saved replies behind the lightning button. Type / in the box to search them.", type: "toggle", def: true },
+    { group: "Messages", key: "chatThemes", label: "Chat wallpapers and bubble colors", desc: "Paint button in the chat header. Per chat, saved on this device.", type: "toggle", def: true },
+    { group: "Messages", key: "inboxTools", label: "Inbox search, filters, pins and archive", desc: "Pins and archive are saved on this device.", type: "toggle", def: true },
+    { group: "Messages", key: "translate", label: "Translate button", desc: "Uses the browser's built-in translator, on your device.", type: "toggle", def: true },
+    { group: "Messages", key: "autoTranslate", label: "Auto-translate incoming messages", desc: "Only translates messages not already in your language.", type: "toggle", def: false },
+    {
+      group: "Messages",
+      key: "translateTo",
+      label: "Translate into",
+      type: "select",
+      def: "en",
+      options: [["en", "English"], ["es", "Spanish"], ["fr", "French"], ["pt", "Portuguese"], ["de", "German"], ["it", "Italian"], ["ja", "Japanese"], ["ko", "Korean"], ["zh", "Chinese"], ["ar", "Arabic"], ["hi", "Hindi"], ["ru", "Russian"]].map(([value, label]) => ({ value, label }))
     },
     { group: "Messages", key: "dmLagFix", label: "Long chat lag fix", desc: "Off-screen messages stop costing anything while you type.", type: "toggle", def: true },
     { group: "Playback", key: "audioWatchdog", label: "Double audio fix", desc: "Only one video plays sound. Hidden and off-screen videos get paused.", type: "toggle", def: true },
@@ -223,8 +252,8 @@
     return JSON.stringify({ app: "TikTok Plus", version: 1, settings: state }, null, 2);
   }
   function importJson(text) {
-    const data = JSON.parse(text);
-    const incoming = data && data.settings ? data.settings : data;
+    const data2 = JSON.parse(text);
+    const incoming = data2 && data2.settings ? data2.settings : data2;
     for (const k in incoming) if (k in DEFAULTS) set(k, incoming[k]);
   }
   function reset() {
@@ -377,7 +406,7 @@
   }
 
   // src/features/composer.js
-  var CSS = `
+  var CSS2 = `
   [data-tkdm] .DraftEditor-root { position: absolute !important; opacity: 0 !important;
     pointer-events: none !important; height: 0 !important; overflow: hidden !important; }
   .tkdm-input { display: block; width: 100%; box-sizing: border-box; min-height: 20px;
@@ -399,6 +428,17 @@
     p.onChange(next);
   }
   var boxes = /* @__PURE__ */ new Set();
+  function insertText(text) {
+    const st = [...boxes].find((s) => s.box.isConnected);
+    if (!st) return false;
+    const ta = st.ta;
+    const a = ta.selectionStart ?? ta.value.length, b = ta.selectionEnd ?? ta.value.length;
+    ta.value = ta.value.slice(0, a) + text + ta.value.slice(b);
+    ta.focus();
+    ta.setSelectionRange(a + text.length, a + text.length);
+    ta.dispatchEvent(new Event("input", { bubbles: true }));
+    return true;
+  }
   function activeBox() {
     return [...boxes].find((s) => s.box.isConnected) || null;
   }
@@ -407,7 +447,7 @@
     const p0 = draftCtx(box);
     if (!p0) return;
     box.__tkdm = true;
-    addStyle("tkdm-style", CSS);
+    addStyle("tkdm-style", CSS2);
     const ta = document.createElement("textarea");
     ta.className = "tkdm-input";
     ta.rows = 1;
@@ -577,7 +617,7 @@
   }
 
   // src/ui/dock.js
-  var CSS2 = `
+  var CSS3 = `
   .tkp-dock { position: fixed; z-index: 2147483000; right: 18px; bottom: 18px; display: flex;
     align-items: center; gap: 2px; padding: 4px; border-radius: 999px;
     background: rgba(22,22,26,.82); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
@@ -606,7 +646,7 @@
   }
   function ensure() {
     if (dock) return;
-    addStyle("tkp-dock-css", CSS2);
+    addStyle("tkp-dock-css", CSS3);
     dock = h("div", { class: "tkp-dock", hidden: true });
     setInterval(() => {
       if (!dock.isConnected && document.body) document.body.appendChild(dock);
@@ -624,14 +664,14 @@
 
   // src/features/speed.js
   var STEPS = SCHEMA.find((s) => s.key === "speed").options.map((o) => o.value);
-  var CSS3 = `
+  var CSS4 = `
   .tkp-speed-val { min-width: 44px; text-align: center; cursor: pointer; font-weight: 700; }
   .tkp-speed-val.tkp-fast { color: #25f4ee; }
 `;
   function startSpeed() {
     let applying = false;
     const target = () => Number(get("speed")) || 1;
-    const apply = (v) => {
+    const apply3 = (v) => {
       const s = target();
       if (Math.abs(v.playbackRate - s) > 1e-3) {
         applying = true;
@@ -642,12 +682,12 @@
         applying = false;
       }
     };
-    const applyAll = () => document.querySelectorAll("video").forEach(apply);
+    const applyAll = () => document.querySelectorAll("video").forEach(apply3);
     for (const ev of ["play", "loadedmetadata", "ratechange"]) {
       document.addEventListener(ev, (e) => {
         if (!(e.target instanceof HTMLVideoElement)) return;
         if (ev === "ratechange" && applying) return;
-        apply(e.target);
+        apply3(e.target);
       }, true);
     }
     on("speed", applyAll);
@@ -666,7 +706,7 @@
         e.preventDefault();
       }
     }, true);
-    addStyle("tkp-speed-css", CSS3);
+    addStyle("tkp-speed-css", CSS4);
     const g = dockGroup(10, () => get("speedPill"));
     const val = h("span", { class: "tkp-speed-val", title: "Back to 1x", onclick: () => set("speed", 1) });
     g.append(
@@ -683,7 +723,7 @@
   }
 
   // src/features/dmLag.js
-  var CSS4 = `[data-tkp-cv] { content-visibility: auto; }`;
+  var CSS5 = `[data-tkp-cv] { content-visibility: auto; }`;
   var KEEP_NEWEST = 30;
   function tagOld() {
     const items = document.querySelectorAll('[data-e2e="dm-new-chat-item"]');
@@ -707,7 +747,7 @@
     let timer = null;
     const sync = () => {
       if (get("dmLagFix")) {
-        addStyle("tkp-dmlag-css", CSS4);
+        addStyle("tkp-dmlag-css", CSS5);
         if (!timer) timer = setInterval(tagOld, 2e3);
         tagOld();
       } else {
@@ -737,7 +777,7 @@
     return `:root { --tkp-a: ${ac.a}; --tkp-b: ${ac.b}; --tkp-me: ${ac.me};
     --tkp-them: #2a2a31; --tkp-them-text: #f1f1f3; --tkp-r: 20px; --tkp-r-tight: 6px; }`;
   }
-  var CSS5 = `
+  var CSS6 = `
 /* ---------- bubbles ---------- */
 ${ITEM} ${TEXT} {
   padding: 9px 14px !important; border-radius: var(--tkp-r) !important; font-size: 15px !important;
@@ -836,9 +876,9 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
   }
   function tag() {
     if (!document.querySelector(ITEM + ', [data-e2e="dm-new-conversation-item"]')) return;
-    const list = document.querySelector('[data-e2e="dm-new-message-list"]');
-    if (list !== lastList) {
-      lastList = list;
+    const list2 = document.querySelector('[data-e2e="dm-new-message-list"]');
+    if (list2 !== lastList) {
+      lastList = list2;
       primed = false;
     }
     const nodes = document.querySelectorAll(ITEM + ', [data-e2e="dm-new-time-separator"]');
@@ -888,7 +928,7 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
     const sync = () => {
       if (get("appLook")) {
         addStyle("tkp-look-vars", vars());
-        addStyle("tkp-look-css", CSS5);
+        addStyle("tkp-look-css", CSS6);
         if (!obs) {
           obs = new MutationObserver(queue);
           obs.observe(document.documentElement, { childList: true, subtree: true });
@@ -1208,14 +1248,14 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
     addStyle("tkp-filter-css", FILTERED);
     let lastSkipped = null;
     setInterval(() => {
-      const list = words();
+      const list2 = words();
       const items = document.querySelectorAll('[data-e2e="recommend-list-item-container"]');
       for (const item2 of items) {
-        const hit = list.length ? list.find((w) => itemText(item2).includes(w)) : null;
+        const hit = list2.length ? list2.find((w) => itemText(item2).includes(w)) : null;
         if (hit) item2.setAttribute("data-tkp-filtered", "Filtered: " + hit);
         else if (item2.hasAttribute("data-tkp-filtered")) item2.removeAttribute("data-tkp-filtered");
       }
-      if (!list.length || !onFeedPage()) return;
+      if (!list2.length || !onFeedPage()) return;
       const v = activeVideo();
       const item = v && v.closest('[data-e2e="recommend-list-item-container"]');
       if (item && item.hasAttribute("data-tkp-filtered") && item !== lastSkipped) {
@@ -1225,9 +1265,561 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
     }, 700);
   }
 
+  // src/ui/popover.js
+  var CSS7 = `
+  .tkp-pop { position: fixed; z-index: 2147483003; width: 300px; max-height: 420px; overflow: auto; padding: 10px;
+    background: rgba(24,24,30,.98); color: #f1f1f2; border: 1px solid rgba(255,255,255,.1); border-radius: 16px;
+    box-shadow: 0 16px 50px rgba(0,0,0,.55); font: 14px/1.35 system-ui, -apple-system, Segoe UI, sans-serif;
+    animation: tkp-pop-in .12s ease-out both; }
+  @keyframes tkp-pop-in { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .tkp-pop h5 { margin: 4px 4px 8px; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; opacity: .55; }
+  .tkp-pop-row { display: flex; align-items: center; gap: 8px; padding: 8px 8px; border-radius: 10px; cursor: pointer; }
+  .tkp-pop-row:hover, .tkp-pop-row.tkp-sel { background: rgba(255,255,255,.08); }
+  .tkp-pop-row .tkp-grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tkp-pop-x { all: unset; cursor: pointer; opacity: .45; padding: 0 4px; }
+  .tkp-pop-x:hover { opacity: 1; }
+  .tkp-pop input[type=text], .tkp-pop textarea, .tkp-pop select { width: 100%; box-sizing: border-box; background: #22222a;
+    color: #fff; border: 1px solid rgba(255,255,255,.15); border-radius: 9px; padding: 7px 9px; font: inherit; }
+  .tkp-pop .tkp-pbtn { all: unset; cursor: pointer; padding: 7px 12px; border-radius: 9px; background: #2a2a33;
+    font-weight: 600; font-size: 13px; }
+  .tkp-pop .tkp-pbtn:hover { background: #34343e; }
+  .tkp-pop .tkp-pbtn.tkp-primary { background: var(--tkp-a, #fe2c55); }
+  .tkp-pop .tkp-hint { font-size: 12px; opacity: .55; margin: 6px 4px 0; }
+`;
+  var current = null;
+  function closePopover() {
+    if (current) {
+      current.el.remove();
+      document.removeEventListener("pointerdown", current.out, true);
+      document.removeEventListener("keydown", current.key, true);
+      current = null;
+    }
+  }
+  function openPopover(anchor, build, opts = {}) {
+    addStyle("tkp-pop-css", CSS7);
+    if (current && current.anchor === anchor) {
+      closePopover();
+      return null;
+    }
+    closePopover();
+    const el = h("div", { class: "tkp-pop", role: "dialog" });
+    if (opts.width) el.style.width = opts.width + "px";
+    build(el);
+    document.body.appendChild(el);
+    const r = anchor.getBoundingClientRect();
+    const w = el.offsetWidth, hh = el.offsetHeight;
+    let left = Math.min(Math.max(8, r.right - w), innerWidth - w - 8);
+    let top = r.top - hh - 10;
+    if (top < 8) top = Math.min(r.bottom + 10, innerHeight - hh - 8);
+    el.style.left = left + "px";
+    el.style.top = top + "px";
+    const out = (e) => {
+      if (!el.contains(e.target) && !anchor.contains(e.target)) closePopover();
+    };
+    const key = (e) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        closePopover();
+      }
+    };
+    document.addEventListener("pointerdown", out, true);
+    document.addEventListener("keydown", key, true);
+    current = { el, anchor, out, key };
+    return el;
+  }
+
+  // src/features/quickReplies.js
+  var DEFAULTS2 = ["On my way!", "Haha 😂", "Sounds good 👍", "Can't talk rn, I'll text you later", "Love this ❤️"];
+  var list = () => loadData("quickReplies", DEFAULTS2);
+  var save2 = (l) => saveData("quickReplies", l);
+  var CSS8 = `
+  .tkp-qr-btn { all: unset; cursor: pointer; width: 28px; height: 28px; display: grid; place-items: center;
+    border-radius: 50%; font-size: 16px; margin-right: 6px; transition: transform .15s; }
+  .tkp-qr-btn:hover { transform: scale(1.12); background: rgba(255,255,255,.08); }
+`;
+  function buildList(el, filter2, onPick) {
+    el.textContent = "";
+    el.append(h("h5", null, "Quick replies"));
+    const items = list().map((t, i) => ({ t, i })).filter((x) => !filter2 || x.t.toLowerCase().includes(filter2.toLowerCase()));
+    items.forEach((x, n) => {
+      const row2 = h(
+        "div",
+        { class: "tkp-pop-row" + (filter2 && n === 0 ? " tkp-sel" : ""), title: x.t },
+        h("span", { class: "tkp-grow" }, x.t),
+        filter2 ? null : h("button", { class: "tkp-pop-x", title: "Delete", onclick: (e) => {
+          e.stopPropagation();
+          const l = list();
+          l.splice(x.i, 1);
+          save2(l);
+          buildList(el, filter2, onPick);
+        } }, "✕")
+      );
+      row2.addEventListener("click", () => onPick(x.t));
+      el.append(row2);
+    });
+    if (!items.length) el.append(h("div", { class: "tkp-hint" }, filter2 ? "No match. Press Esc to keep typing." : "No quick replies yet."));
+    if (!filter2) {
+      const input = h("input", { type: "text", placeholder: "Add a quick reply..." });
+      input.addEventListener("keydown", (e) => {
+        e.stopPropagation();
+        if (e.key === "Enter" && input.value.trim()) {
+          const l = list();
+          l.push(input.value.trim());
+          save2(l);
+          buildList(el, filter2, onPick);
+        }
+      });
+      el.append(h("div", { style: { marginTop: "8px" } }, input), h("div", { class: "tkp-hint" }, "Tip: type / in the message box to search these."));
+    }
+  }
+  function startQuickReplies() {
+    addStyle("tkp-qr-css", CSS8);
+    setInterval(() => {
+      if (!get("quickReplies")) {
+        document.querySelectorAll(".tkp-qr-btn").forEach((b) => b.remove());
+        return;
+      }
+      for (const emoji of document.querySelectorAll('[data-e2e="dm-new-emoji-btn"]')) {
+        const host = emoji.parentElement;
+        if (!host || host.querySelector(".tkp-qr-btn")) continue;
+        const btn = h("button", { class: "tkp-qr-btn", title: "Quick replies", type: "button" }, "⚡");
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openPopover(btn, (el) => buildList(el, "", (t) => {
+            closePopover();
+            insertText(t);
+          }));
+        });
+        host.insertBefore(btn, emoji);
+      }
+    }, 800);
+    let slashPop = null;
+    document.addEventListener("input", (e) => {
+      if (!get("quickReplies") || !e.target.classList || !e.target.classList.contains("tkdm-input")) return;
+      const ta = e.target, v = ta.value;
+      if (v.startsWith("/") && !v.includes("\n") && v.length <= 40) {
+        const pick = (t) => {
+          closePopover();
+          slashPop = null;
+          ta.value = "";
+          ta.dispatchEvent(new Event("input", { bubbles: true }));
+          insertText(t);
+        };
+        if (!slashPop || !slashPop.isConnected) slashPop = openPopover(ta, (el) => buildList(el, v.slice(1), pick));
+        else buildList(slashPop, v.slice(1), pick);
+        if (slashPop) slashPop.__pick = () => {
+          const first = list().find((t) => t.toLowerCase().includes(v.slice(1).toLowerCase()));
+          if (first) pick(first);
+        };
+      } else if (slashPop) {
+        closePopover();
+        slashPop = null;
+      }
+    }, true);
+    document.addEventListener("keydown", (e) => {
+      if (!slashPop || !slashPop.isConnected) return;
+      if (!e.target.classList || !e.target.classList.contains("tkdm-input")) return;
+      if (e.key === "Enter" && !e.shiftKey || e.key === "Tab") {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        slashPop.__pick && slashPop.__pick();
+      }
+    }, true);
+    void activeBox;
+  }
+
+  // src/features/chatTheme.js
+  var WALLPAPERS = {
+    none: { label: "None", css: "" },
+    aurora: { label: "Aurora", css: "radial-gradient(900px 600px at 15% 10%, #3b0f5e 0%, transparent 60%), radial-gradient(800px 600px at 90% 80%, #0f4f5e 0%, transparent 60%), #0b0b10" },
+    midnight: { label: "Midnight", css: "linear-gradient(160deg, #0b1026 0%, #141b3d 50%, #0b0b14 100%)" },
+    sunset: { label: "Sunset", css: "linear-gradient(170deg, #2b0f1e 0%, #4a1626 45%, #1a0b10 100%)" },
+    ocean: { label: "Ocean", css: "linear-gradient(180deg, #06202b 0%, #0b3442 50%, #061419 100%)" },
+    forest: { label: "Forest", css: "linear-gradient(170deg, #0b1f14 0%, #123323 55%, #08130c 100%)" },
+    grid: { label: "Neon grid", css: "linear-gradient(rgba(254,44,85,.08) 1px, transparent 1px) 0 0/32px 32px, linear-gradient(90deg, rgba(37,244,238,.08) 1px, transparent 1px) 0 0/32px 32px, #0b0b10" },
+    dots: { label: "Dots", css: "radial-gradient(rgba(255,255,255,.08) 1.2px, transparent 1.4px) 0 0/22px 22px, #0e0e13" }
+  };
+  var all = () => loadData("chatThemes", {});
+  var chatKey = () => {
+    const el = document.querySelector('[data-e2e="chat-uniqueid"]');
+    return el ? el.textContent.trim().replace(/^@/, "") : "";
+  };
+  var imgCache = /* @__PURE__ */ new Map();
+  async function blurred(dataUrl, px) {
+    const k = dataUrl.length + ":" + dataUrl.slice(-40) + ":" + px;
+    if (imgCache.has(k)) return imgCache.get(k);
+    const img = await new Promise((res, rej) => {
+      const i = new Image();
+      i.onload = () => res(i);
+      i.onerror = rej;
+      i.src = dataUrl;
+    });
+    const c = document.createElement("canvas");
+    c.width = img.width;
+    c.height = img.height;
+    const g = c.getContext("2d");
+    if (px) {
+      g.filter = `blur(${px}px)`;
+      g.drawImage(img, -px * 2, -px * 2, c.width + px * 4, c.height + px * 4);
+    } else g.drawImage(img, 0, 0);
+    const out = c.toDataURL("image/jpeg", 0.85);
+    imgCache.set(k, out);
+    return out;
+  }
+  async function fileToData(file) {
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await new Promise((res, rej) => {
+        const i = new Image();
+        i.onload = () => res(i);
+        i.onerror = rej;
+        i.src = url;
+      });
+      const scale = Math.min(1, 1280 / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      return c.toDataURL("image/jpeg", 0.82);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+  async function apply() {
+    const key = chatKey();
+    const t = key ? all()[key] : null;
+    if (!get("chatThemes") || !t || !t.wall && !t.bubble) {
+      removeStyle("tkp-chattheme-css");
+      return;
+    }
+    let bg = "";
+    const dim = Math.max(0, Math.min(0.85, (t.dim || 0) / 100));
+    if (t.wall === "custom" && t.img) {
+      const src = await blurred(t.img, t.blur || 0);
+      bg = `linear-gradient(rgba(0,0,0,${dim}), rgba(0,0,0,${dim})), url("${src}") center/cover no-repeat`;
+    } else if (t.wall && WALLPAPERS[t.wall] && WALLPAPERS[t.wall].css) {
+      bg = (dim ? `linear-gradient(rgba(0,0,0,${dim}), rgba(0,0,0,${dim})), ` : "") + WALLPAPERS[t.wall].css;
+    }
+    const ac = t.bubble && ACCENTS[t.bubble];
+    const css = (bg ? `[data-e2e="dm-new-message-list"] { background: ${bg} !important; background-attachment: local !important; }` : "") + (ac ? `:root { --tkp-me: ${ac.me} !important; --tkp-a: ${ac.a} !important; --tkp-b: ${ac.b} !important; }` : "");
+    addStyle("tkp-chattheme-css", css);
+  }
+  function edit(key, patch) {
+    const a = all();
+    a[key] = Object.assign({}, a[key], patch);
+    if (!saveData("chatThemes", a)) toast("Couldn't save. The image may be too big for browser storage.");
+    apply();
+  }
+  function panel(el) {
+    const key = chatKey();
+    const t = all()[key] || {};
+    el.append(h("h5", null, "Chat appearance · @" + key));
+    const wallSel = h("select", null, Object.entries(WALLPAPERS).map(([k, v]) => h("option", { value: k }, v.label)), h("option", { value: "custom" }, "Your image..."));
+    wallSel.value = t.wall || "none";
+    const file = h("input", { type: "file", accept: "image/*", hidden: true });
+    file.addEventListener("change", async () => {
+      const f = file.files && file.files[0];
+      if (!f) return;
+      try {
+        edit(key, { wall: "custom", img: await fileToData(f) });
+      } catch (e) {
+        toast("That image couldn't be loaded.");
+      }
+    });
+    wallSel.addEventListener("change", () => {
+      if (wallSel.value === "custom") file.click();
+      else edit(key, { wall: wallSel.value });
+    });
+    const blur = h("input", { type: "range", min: 0, max: 20, value: t.blur || 0 });
+    blur.addEventListener("change", () => edit(key, { blur: Number(blur.value) }));
+    const dim = h("input", { type: "range", min: 0, max: 80, value: t.dim || 0 });
+    dim.addEventListener("change", () => edit(key, { dim: Number(dim.value) }));
+    const bub = h("select", null, h("option", { value: "" }, "Same as everywhere"), Object.entries(ACCENTS).map(([k, v]) => h("option", { value: k }, v.label)));
+    bub.value = t.bubble || "";
+    bub.addEventListener("change", () => edit(key, { bubble: bub.value }));
+    const lbl = (txt, ctl) => h("label", { style: { display: "block", margin: "8px 4px" } }, h("div", { style: { fontSize: "12.5px", opacity: ".7", marginBottom: "4px" } }, txt), ctl);
+    el.append(
+      lbl("Wallpaper", wallSel),
+      file,
+      lbl("Blur (your image)", blur),
+      lbl("Darken", dim),
+      lbl("Bubble color", bub),
+      h(
+        "div",
+        { style: { display: "flex", justifyContent: "flex-end", marginTop: "6px" } },
+        h("button", { class: "tkp-pbtn", onclick: () => {
+          const a = all();
+          delete a[key];
+          saveData("chatThemes", a);
+          apply();
+          el.remove();
+        } }, "Reset this chat")
+      )
+    );
+  }
+  function startChatTheme() {
+    addStyle("tkp-ct-css", `.tkp-ct-btn { all: unset; cursor: pointer; margin-left: auto; width: 34px; height: 34px; display: grid;
+    place-items: center; border-radius: 50%; font-size: 17px; } .tkp-ct-btn:hover { background: rgba(255,255,255,.08); }`);
+    let lastKey = null;
+    setInterval(() => {
+      const nick = document.querySelector('[data-e2e="dm-new-chat-nickname"]');
+      const header = nick && nick.closest('[class*="DivChatHeader"]');
+      const host = header || nick && nick.parentElement && nick.parentElement.parentElement && nick.parentElement.parentElement.parentElement;
+      if (get("chatThemes") && host && !host.querySelector(".tkp-ct-btn")) {
+        const btn = h("button", { class: "tkp-ct-btn", title: "Chat appearance (wallpaper, bubbles)", type: "button" }, "🎨");
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openPopover(btn, panel, { width: 280 });
+        });
+        host.appendChild(btn);
+        if (getComputedStyle(host).display !== "flex") host.style.display = "flex";
+        host.style.alignItems = "center";
+      }
+      if (!get("chatThemes")) document.querySelectorAll(".tkp-ct-btn").forEach((b) => b.remove());
+      const key = chatKey();
+      if (key !== lastKey) {
+        lastKey = key;
+        apply();
+      }
+    }, 700);
+  }
+
+  // src/features/inboxTools.js
+  var STYLES = `
+  .tkp-inbox-bar { padding: 6px 12px 8px; display: flex; flex-direction: column; gap: 8px; }
+  .tkp-inbox-search { box-sizing: border-box; width: 100%; padding: 8px 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,.1);
+    background: #1b1b21; color: #fff; font: 14px system-ui, sans-serif; outline: none; }
+  .tkp-inbox-search:focus { border-color: var(--tkp-a, #fe2c55); }
+  .tkp-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tkp-chip { all: unset; cursor: pointer; padding: 5px 11px; border-radius: 999px; background: #1f1f26; font: 600 12.5px system-ui, sans-serif;
+    color: rgba(255,255,255,.75); }
+  .tkp-chip.tkp-on { background: var(--tkp-a, #fe2c55); color: #fff; }
+  .tkp-pins { display: flex; gap: 10px; overflow-x: auto; padding: 2px 2px 4px; }
+  .tkp-pin { all: unset; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; width: 58px; }
+  .tkp-pin img { width: 46px; height: 46px; border-radius: 50%; object-fit: cover;
+    box-shadow: 0 0 0 2px #0e0e11, 0 0 0 4px var(--tkp-a, #fe2c55); }
+  .tkp-pin span { font: 11.5px system-ui, sans-serif; color: rgba(255,255,255,.8); max-width: 58px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  [data-tkp-dim] { opacity: .16 !important; transition: opacity .15s; }
+  [data-tkp-archived] { opacity: .45; }
+  [data-tkp-archived] [data-e2e="dm-new-conversation-nickname"]::after { content: ' · archived'; font-weight: 400; opacity: .7; font-size: 12px; }
+  [data-tkp-pinned] [data-e2e="dm-new-conversation-nickname"]::before { content: '📌 '; }
+  .tkp-row-tools { position: absolute; right: 44px; top: 50%; transform: translateY(-50%); display: none; gap: 2px; z-index: 3; }
+  [data-e2e="dm-new-conversation-item"]:hover .tkp-row-tools { display: flex; }
+  .tkp-row-tools button { all: unset; cursor: pointer; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+    background: rgba(30,30,36,.95); font-size: 13px; }
+  .tkp-row-tools button:hover { background: #33333d; }
+`;
+  var data = () => loadData("inbox", { pins: {}, archived: {} });
+  var store = (d) => saveData("inbox", d);
+  var filter = "all";
+  var query = "";
+  function infoOf(item) {
+    const name = (item.querySelector('[data-e2e="dm-new-conversation-nickname"]') || {}).textContent || "";
+    const img = item.querySelector('[data-e2e="dm-new-conversation-avatar"] img');
+    return { name: name.trim(), avatar: img ? img.src : "" };
+  }
+  function openConv(id) {
+    const item = document.querySelector(`[data-e2e="dm-new-conversation-item"][data-conv-id="${CSS.escape(id)}"]`);
+    if (item) {
+      item.scrollIntoView({ block: "nearest" });
+      item.click();
+    }
+  }
+  function renderPins(bar) {
+    const pins = bar.querySelector(".tkp-pins");
+    const d = data();
+    pins.textContent = "";
+    for (const [id, info] of Object.entries(d.pins)) {
+      pins.append(h(
+        "button",
+        { class: "tkp-pin", title: info.name, onclick: () => openConv(id) },
+        info.avatar ? h("img", { src: info.avatar, alt: "" }) : h("div", { style: { width: "46px", height: "46px", borderRadius: "50%", background: "#333" } }),
+        h("span", null, info.name)
+      ));
+    }
+    pins.hidden = !Object.keys(d.pins).length;
+  }
+  function apply2(bar) {
+    const d = data();
+    for (const item of document.querySelectorAll('[data-e2e="dm-new-conversation-item"]')) {
+      const id = item.getAttribute("data-conv-id") || "";
+      const pinned = !!d.pins[id], archived = !!d.archived[id];
+      item.toggleAttribute("data-tkp-pinned", pinned);
+      item.toggleAttribute("data-tkp-archived", archived && filter !== "archived");
+      const text = item.textContent.toLowerCase();
+      const unread = !!item.querySelector('[data-e2e="dm-new-conversation-unread"]');
+      let show = true;
+      if (query && !text.includes(query)) show = false;
+      if (filter === "unread" && !unread) show = false;
+      if (filter === "pinned" && !pinned) show = false;
+      if (filter === "archived" && !archived) show = false;
+      item.toggleAttribute("data-tkp-dim", !show);
+      if (!item.querySelector(".tkp-row-tools")) {
+        const tools = h("div", { class: "tkp-row-tools" });
+        const pinB = h("button", { title: "Pin to top (on this device)" });
+        const arcB = h("button", { title: "Archive (on this device)" });
+        pinB.addEventListener("click", (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          const dd = data();
+          const iid = item.getAttribute("data-conv-id");
+          if (dd.pins[iid]) delete dd.pins[iid];
+          else dd.pins[iid] = infoOf(item);
+          store(dd);
+          renderPins(bar);
+          apply2(bar);
+        });
+        arcB.addEventListener("click", (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          const dd = data();
+          const iid = item.getAttribute("data-conv-id");
+          if (dd.archived[iid]) delete dd.archived[iid];
+          else dd.archived[iid] = true;
+          store(dd);
+          apply2(bar);
+        });
+        tools.append(pinB, arcB);
+        item.append(tools);
+      }
+      const t = item.querySelector(".tkp-row-tools");
+      t.children[0].textContent = pinned ? "📍" : "📌";
+      t.children[0].title = pinned ? "Unpin" : "Pin to top (on this device)";
+      t.children[1].textContent = archived ? "📤" : "🗄";
+      t.children[1].title = archived ? "Unarchive" : "Archive (on this device)";
+    }
+  }
+  function startInboxTools() {
+    addStyle("tkp-inbox-css", STYLES);
+    let bar = null;
+    setInterval(() => {
+      const list2 = document.querySelector('[data-e2e="dm-new-conversation-list"]');
+      if (!get("inboxTools") || !list2) {
+        if (bar) {
+          bar.remove();
+          bar = null;
+        }
+        document.querySelectorAll("[data-tkp-dim],[data-tkp-archived],[data-tkp-pinned]").forEach((e) => {
+          e.removeAttribute("data-tkp-dim");
+          e.removeAttribute("data-tkp-archived");
+          e.removeAttribute("data-tkp-pinned");
+        });
+        return;
+      }
+      if (!bar || !bar.isConnected) {
+        const search = h("input", { class: "tkp-inbox-search", type: "text", placeholder: "Search chats" });
+        search.addEventListener("input", () => {
+          query = search.value.trim().toLowerCase();
+          apply2(bar);
+        });
+        search.addEventListener("keydown", (e) => e.stopPropagation());
+        const chips = h("div", { class: "tkp-chips" });
+        for (const [k, label] of [["all", "All"], ["unread", "Unread"], ["pinned", "Pinned"], ["archived", "Archived"]]) {
+          const c = h("button", { class: "tkp-chip" + (filter === k ? " tkp-on" : ""), onclick: () => {
+            filter = k;
+            chips.querySelectorAll(".tkp-chip").forEach((x) => x.classList.toggle("tkp-on", x === c));
+            apply2(bar);
+          } }, label);
+          chips.append(c);
+        }
+        bar = h("div", { class: "tkp-inbox-bar" }, search, chips, h("div", { class: "tkp-pins" }));
+        list2.parentElement.insertBefore(bar, list2);
+        renderPins(bar);
+      }
+      apply2(bar);
+    }, 900);
+  }
+
+  // src/features/translate.js
+  var CSS9 = `
+  .tkp-tr-btn { all: unset; cursor: pointer; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%;
+    font: 700 11px system-ui, sans-serif; color: #ddd; }
+  .tkp-tr-btn:hover { background: rgba(255,255,255,.1); }
+  .tkp-tr { margin-top: 4px; padding: 6px 10px; border-radius: 12px; background: rgba(255,255,255,.06); color: rgba(255,255,255,.85);
+    font: 13.5px/1.35 system-ui, sans-serif; max-width: 70%; }
+  [data-tkp-side="me"] .tkp-tr { margin-left: auto; }
+  .tkp-tr small { display: block; opacity: .5; font-size: 11px; margin-bottom: 2px; }
+`;
+  var translators = /* @__PURE__ */ new Map();
+  var detector = null;
+  async function detect(text) {
+    if (!("LanguageDetector" in self)) return null;
+    if (!detector) detector = await self.LanguageDetector.create();
+    const r = await detector.detect(text);
+    return r && r[0] && r[0].confidence > 0.4 ? r[0].detectedLanguage : null;
+  }
+  async function translate(text) {
+    if (!("Translator" in self)) throw new Error("no-api");
+    const target = get("translateTo") || "en";
+    const source = await detect(text);
+    if (!source || source === "und") throw new Error("unknown-language");
+    if (source === target) return { same: true, source };
+    const key = source + ">" + target;
+    if (!translators.has(key)) {
+      const avail = await self.Translator.availability({ sourceLanguage: source, targetLanguage: target });
+      if (avail === "unavailable") throw new Error("pair-unavailable");
+      translators.set(key, self.Translator.create({ sourceLanguage: source, targetLanguage: target }));
+    }
+    const tr = await translators.get(key);
+    return { text: await tr.translate(text), source };
+  }
+  async function translateItem(item, quiet) {
+    if (item.querySelector(".tkp-tr")) {
+      item.querySelector(".tkp-tr").remove();
+      return;
+    }
+    const textEl = item.querySelector('[data-e2e="dm-new-message-text"]');
+    if (!textEl) return;
+    const text = textEl.textContent.trim();
+    if (!text) return;
+    const out = h("div", { class: "tkp-tr" }, h("small", null, "Translating..."));
+    textEl.parentElement.insertAdjacentElement("afterend", out);
+    try {
+      const r = await translate(text);
+      if (r.same) {
+        out.remove();
+        if (!quiet) toast("Already in your language.");
+        return;
+      }
+      out.textContent = "";
+      out.append(h("small", null, "Translated from " + r.source), r.text);
+    } catch (e) {
+      out.remove();
+      if (quiet) return;
+      const m = String(e && e.message);
+      toast(m === "no-api" ? "This browser doesn't have the built-in translator. Edge 148 or newer has it." : m === "pair-unavailable" ? "The translator can't do that language pair." : m === "unknown-language" ? "Couldn't tell what language that is." : "Translation failed: " + m);
+    }
+  }
+  function startTranslate() {
+    addStyle("tkp-tr-css", CSS9);
+    const done = /* @__PURE__ */ new WeakSet();
+    setInterval(() => {
+      if (!get("translate")) return;
+      for (const item of document.querySelectorAll('[data-e2e="dm-new-chat-item"]')) {
+        if (!item.querySelector('[data-e2e="dm-new-message-text"]')) continue;
+        const actions = item.querySelector('[class*="DivActions"]');
+        if (actions && !actions.querySelector(".tkp-tr-btn")) {
+          const b = h("button", { class: "tkp-tr-btn", title: "Translate", type: "button" }, "Aa");
+          b.addEventListener("click", (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            translateItem(item);
+          });
+          actions.prepend(b);
+        }
+        if (get("autoTranslate") && !done.has(item) && item.getAttribute("data-tkp-side") !== "me") {
+          done.add(item);
+          translateItem(item, true);
+        }
+      }
+    }, 900);
+  }
+
   // src/ui/panel.js
-  var VERSION = true ? "2.2.0" : "";
-  var CSS6 = `
+  var VERSION = true ? "2.3.0" : "";
+  var CSS10 = `
   .tkp-gear { position: fixed; z-index: 2147483001; left: 14px; bottom: 14px; width: 40px; height: 40px;
     border-radius: 50%; border: 1px solid rgba(255,255,255,.14); cursor: pointer;
     background: linear-gradient(135deg, rgba(254,44,85,.9), rgba(37,244,238,.75));
@@ -1356,7 +1948,7 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
     const alertBox = (t) => {
       msg.textContent = t;
     };
-    const panel = h(
+    const panel2 = h(
       "div",
       { class: "tkp-panel", role: "dialog", "aria-label": "TikTok Plus settings" },
       h(
@@ -1399,13 +1991,13 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
     };
     const overlay = h("div", { class: "tkp-overlay", onclick: (e) => {
       if (e.target === overlay) close();
-    } }, panel);
+    } }, panel2);
     overlay.addEventListener("keydown", (e) => e.stopPropagation());
     document.addEventListener("keydown", onKey, true);
     document.body.appendChild(overlay);
   }
   function startPanel() {
-    addStyle("tkp-panel-css", CSS6);
+    addStyle("tkp-panel-css", CSS10);
     const gear = h("button", { class: "tkp-gear", title: "TikTok Plus settings", "aria-label": "TikTok Plus settings", onclick: openPanel }, "⚙");
     const mount = () => {
       if (document.body && !gear.isConnected) document.body.appendChild(gear);
@@ -1416,7 +2008,7 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
 
   // src/main.js
   if (!window.__tkPlus) {
-    window.__tkPlus = { version: true ? "2.2.0" : "" };
+    window.__tkPlus = { version: true ? "2.3.0" : "" };
     window.__tkDmSyncGuard12 = window.__tkDmSyncGuard13 = window.__tkDmSyncGuard14 = true;
     safe("flags", installFlags);
     safe("codecSwap", installCodecSwap);
@@ -1433,6 +2025,10 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
       safe("audioFx", startAudioFx);
       safe("autoScroll", startAutoScroll);
       safe("feedClean", startFeedClean);
+      safe("quickReplies", startQuickReplies);
+      safe("chatTheme", startChatTheme);
+      safe("inboxTools", startInboxTools);
+      safe("translate", startTranslate);
       safe("panel", startPanel);
     });
   }

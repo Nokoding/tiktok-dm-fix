@@ -13,6 +13,10 @@ import { startPip } from './features/pip.js';
 import { startAudioFx, installAudioHook } from './features/audioFx.js';
 import { startAutoScroll } from './features/autoScroll.js';
 import { startFeedClean } from './features/feedClean.js';
+import { startQuickReplies } from './features/quickReplies.js';
+import { startChatTheme } from './features/chatTheme.js';
+import { startInboxTools } from './features/inboxTools.js';
+import { startTranslate } from './features/translate.js';
 import { startPanel } from './ui/panel.js';
 
 if (!window.__tkPlus) {
@@ -38,6 +42,10 @@ if (!window.__tkPlus) {
     safe('audioFx', startAudioFx);
     safe('autoScroll', startAutoScroll);
     safe('feedClean', startFeedClean);
+    safe('quickReplies', startQuickReplies);
+    safe('chatTheme', startChatTheme);
+    safe('inboxTools', startInboxTools);
+    safe('translate', startTranslate);
     safe('panel', startPanel);
   });
 }
