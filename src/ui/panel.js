@@ -39,6 +39,7 @@ const CSS = `
   .tkp-switch input:checked + span::after { transform: translateX(18px); }
   .tkp-panel select { background: #22222a; color: #fff; border: 1px solid rgba(255,255,255,.15);
     border-radius: 8px; padding: 6px 8px; font: inherit; }
+  .tkp-text { width: 170px; background: #22222a; color: #fff; border: 1px solid rgba(255,255,255,.15); border-radius: 8px; padding: 6px 8px; font: inherit; resize: vertical; }
   .tkp-btn { all: unset; cursor: pointer; padding: 8px 14px; border-radius: 10px; background: #26262e;
     font-weight: 600; font-size: 13px; }
   .tkp-btn:hover { background: #30303a; }
@@ -64,6 +65,13 @@ function row(s, needsReload) {
     });
     on(s.key, v => { sel.value = String(v); });
     control = sel;
+  } else if (s.type === 'text') {
+    const ta = h('textarea', { rows: 2, placeholder: 'word, another word', class: 'tkp-text' });
+    ta.value = get(s.key) || '';
+    ta.addEventListener('change', () => { set(s.key, ta.value); });
+    ta.addEventListener('keydown', e => e.stopPropagation());
+    on(s.key, v => { if (document.activeElement !== ta) ta.value = v || ''; });
+    control = ta;
   }
   const note = h('div', { class: 'tkp-reload', hidden: true }, 'Reload TikTok to apply');
   const el = h('div', { class: 'tkp-row' },

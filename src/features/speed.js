@@ -1,21 +1,13 @@
 // Playback speed 0.25x to 4x, re-applied to every new video, with a pill and shortcut keys.
 import { get, set, on, SCHEMA } from '../core/settings.js';
 import { addStyle, h, isTyping } from '../core/util.js';
+import { dockGroup } from '../ui/dock.js';
 
 const STEPS = SCHEMA.find(s => s.key === 'speed').options.map(o => o.value);
 
 const CSS = `
-  .tkp-speed { position: fixed; z-index: 2147483000; right: 18px; bottom: 18px; display: flex;
-    align-items: center; gap: 2px; padding: 4px; border-radius: 999px;
-    background: rgba(22,22,26,.82); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,.12); color: #fff; font: 600 13px/1 system-ui, sans-serif;
-    box-shadow: 0 6px 24px rgba(0,0,0,.35); user-select: none; transition: opacity .2s; }
-  .tkp-speed[hidden] { display: none; }
-  .tkp-speed button { all: unset; cursor: pointer; width: 28px; height: 28px; border-radius: 50%;
-    display: grid; place-items: center; font-size: 16px; color: #fff; }
-  .tkp-speed button:hover { background: rgba(255,255,255,.12); }
-  .tkp-speed .tkp-speed-val { min-width: 44px; text-align: center; cursor: pointer; }
-  .tkp-speed .tkp-speed-val.tkp-fast { color: #25f4ee; }
+  .tkp-speed-val { min-width: 44px; text-align: center; cursor: pointer; font-weight: 700; }
+  .tkp-speed-val.tkp-fast { color: #25f4ee; }
 `;
 
 export function startSpeed() {
@@ -53,8 +45,9 @@ export function startSpeed() {
   }, true);
 
   addStyle('tkp-speed-css', CSS);
+  const g = dockGroup(10, () => get('speedPill'));
   const val = h('span', { class: 'tkp-speed-val', title: 'Back to 1x', onclick: () => set('speed', 1) });
-  const pill = h('div', { class: 'tkp-speed', hidden: true },
+  g.append(
     h('button', { title: 'Slower (Shift+,)', onclick: () => step(-1) }, '−'),
     val,
     h('button', { title: 'Faster (Shift+.)', onclick: () => step(1) }, '+'));
@@ -64,12 +57,4 @@ export function startSpeed() {
   };
   render();
   on('speed', render);
-
-  const mount = () => { if (!pill.isConnected && document.body) document.body.appendChild(pill); };
-  setInterval(() => {
-    mount();
-    const onMessages = location.pathname.startsWith('/messages');
-    const hasVideo = [...document.querySelectorAll('video')].some(v => !v.paused && v.isConnected);
-    pill.hidden = !get('speedPill') || onMessages || !hasVideo;
-  }, 700);
 }

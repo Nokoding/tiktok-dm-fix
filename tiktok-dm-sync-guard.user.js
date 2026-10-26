@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TikTok Plus
 // @namespace    nokoding
-// @version      2.1.1
+// @version      2.2.0
 // @description  Makes TikTok web better: fixed DM box (Enter sends, no lost letters), photos, videos and group chats in DMs, double audio fix, speed control, background play and more. Settings behind the gear button.
 // @match        https://www.tiktok.com/*
 // @run-at       document-start
@@ -83,6 +83,34 @@
     if (!t || !t.tagName) return false;
     return t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName);
   }
+  function activeVideo() {
+    let best = null, bestScore = -1;
+    for (const v of document.querySelectorAll("video")) {
+      if (!v.isConnected) continue;
+      const r = v.getBoundingClientRect();
+      const w = Math.max(0, Math.min(r.right, innerWidth) - Math.max(r.left, 0));
+      const hh = Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0));
+      const score = w * hh + (v.paused ? 0 : 1e9);
+      if (w * hh > 0 && score > bestScore) {
+        best = v;
+        bestScore = score;
+      }
+    }
+    return best;
+  }
+  function onFeedPage() {
+    const p = location.pathname;
+    return p === "/" || p.startsWith("/foryou") || p.startsWith("/following") || p.startsWith("/friends") || p.startsWith("/explore");
+  }
+  function toast(text, ms = 2600) {
+    addStyle("tkp-toast-css", `.tkp-toast { position: fixed; z-index: 2147483004; left: 50%; bottom: 84px;
+    transform: translateX(-50%); background: rgba(24,24,30,.96); color: #fff; padding: 10px 16px;
+    border-radius: 12px; font: 13.5px/1.35 system-ui, sans-serif; border: 1px solid rgba(255,255,255,.1);
+    box-shadow: 0 10px 30px rgba(0,0,0,.45); max-width: min(420px, 90vw); text-align: center; }`);
+    const el = h("div", { class: "tkp-toast", role: "status" }, text);
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), ms);
+  }
 
   // src/core/settings.js
   var KEY = "tkplus:settings:v1";
@@ -114,6 +142,33 @@
       def: 1,
       options: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4].map((v) => ({ value: v, label: v + "x" }))
     },
+    { group: "Playback", key: "pip", label: "Picture-in-picture button", desc: "Pop the video out into a floating window. Shift+P.", type: "toggle", def: true },
+    { group: "Playback", key: "pipAuto", label: "Pop out on tab switch", desc: "Tries to start picture-in-picture when you leave the tab. Edge allows it only sometimes.", type: "toggle", def: false },
+    { group: "Playback", key: "autoScroll", label: "Auto scroll", desc: "Goes to the next video when one ends.", type: "toggle", def: false },
+    { group: "Audio", key: "audioDock", label: "Audio buttons on the player", desc: "EQ, loudness and 8D buttons next to the speed control.", type: "toggle", def: true },
+    {
+      group: "Audio",
+      key: "eqPreset",
+      label: "Equalizer",
+      desc: "Applies to every video.",
+      type: "select",
+      def: "off",
+      options: [["off", "Off"], ["bass", "Bass boost"], ["vocal", "Vocals"], ["treble", "Treble"], ["loud", "Loudness (smile)"], ["club", "Club"], ["podcast", "Speech clarity"]].map(([value, label]) => ({ value, label }))
+    },
+    { group: "Audio", key: "normalize", label: "Loudness leveling", desc: "Evens out quiet and loud videos.", type: "toggle", def: false },
+    { group: "Audio", key: "audio8d", label: "8D audio", desc: "Sound slowly circles around you. Best with headphones.", type: "toggle", def: false },
+    {
+      group: "Feed",
+      key: "cleanMode",
+      label: "Clean mode",
+      desc: "Hides clutter. Ultra also hides captions until you hover.",
+      type: "select",
+      def: "off",
+      options: [["off", "Off"], ["clean", "Clean"], ["ultra", "Ultra clean"]].map(([value, label]) => ({ value, label }))
+    },
+    { group: "Feed", key: "commentBlur", label: "Blur comments", desc: "Comments stay blurred until you hover them.", type: "toggle", def: false },
+    { group: "Feed", key: "keywordFilter", label: "Keyword filter", desc: "Comma separated. Matches captions, sounds and usernames.", type: "text", def: "" },
+    { group: "Feed", key: "keywordSkip", label: "Skip filtered videos", desc: "Jumps past videos that match your keywords.", type: "toggle", def: true },
     { group: "Playback", key: "codecSwap", label: "Stutter fix (H.264 only)", desc: "Blocks HEVC so TikTok serves H.264. Try it if videos stutter.", type: "toggle", def: false, reload: true }
   ];
   var DEFAULTS = Object.fromEntries(SCHEMA.map((s) => [s.key, s.def]));
@@ -521,20 +576,57 @@
     }, 1e3);
   }
 
-  // src/features/speed.js
-  var STEPS = SCHEMA.find((s) => s.key === "speed").options.map((o) => o.value);
+  // src/ui/dock.js
   var CSS2 = `
-  .tkp-speed { position: fixed; z-index: 2147483000; right: 18px; bottom: 18px; display: flex;
+  .tkp-dock { position: fixed; z-index: 2147483000; right: 18px; bottom: 18px; display: flex;
     align-items: center; gap: 2px; padding: 4px; border-radius: 999px;
     background: rgba(22,22,26,.82); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
     border: 1px solid rgba(255,255,255,.12); color: #fff; font: 600 13px/1 system-ui, sans-serif;
-    box-shadow: 0 6px 24px rgba(0,0,0,.35); user-select: none; transition: opacity .2s; }
-  .tkp-speed[hidden] { display: none; }
-  .tkp-speed button { all: unset; cursor: pointer; width: 28px; height: 28px; border-radius: 50%;
-    display: grid; place-items: center; font-size: 16px; color: #fff; }
-  .tkp-speed button:hover { background: rgba(255,255,255,.12); }
-  .tkp-speed .tkp-speed-val { min-width: 44px; text-align: center; cursor: pointer; }
-  .tkp-speed .tkp-speed-val.tkp-fast { color: #25f4ee; }
+    box-shadow: 0 6px 24px rgba(0,0,0,.35); user-select: none; }
+  .tkp-dock[hidden] { display: none; }
+  .tkp-dock button { all: unset; cursor: pointer; min-width: 28px; height: 28px; padding: 0 4px; box-sizing: border-box;
+    border-radius: 999px; display: grid; place-items: center; font-size: 15px; color: #fff; }
+  .tkp-dock button:hover { background: rgba(255,255,255,.12); }
+  .tkp-dock button.tkp-on { color: #25f4ee; }
+  .tkp-dock .tkp-sep { width: 1px; height: 18px; background: rgba(255,255,255,.15); margin: 0 3px; }
+  .tkp-dock-group { display: flex; align-items: center; gap: 2px; }
+  .tkp-dock-group[hidden] { display: none; }
+`;
+  var dock = null;
+  var groups = [];
+  function dockGroup(order, visible) {
+    ensure();
+    const g = h("div", { class: "tkp-dock-group" });
+    g.__order = order;
+    g.__visible = visible || (() => true);
+    groups.push(g);
+    groups.sort((a, b) => a.__order - b.__order);
+    groups.forEach((x) => dock.appendChild(x));
+    return g;
+  }
+  function ensure() {
+    if (dock) return;
+    addStyle("tkp-dock-css", CSS2);
+    dock = h("div", { class: "tkp-dock", hidden: true });
+    setInterval(() => {
+      if (!dock.isConnected && document.body) document.body.appendChild(dock);
+      const onMessages = location.pathname.startsWith("/messages");
+      const playing = [...document.querySelectorAll("video")].some((v) => !v.paused && v.isConnected) || !!document.pictureInPictureElement;
+      let any = false;
+      for (const g of groups) {
+        const vis = !!g.__visible();
+        g.hidden = !vis;
+        any = any || vis;
+      }
+      dock.hidden = onMessages || !playing || !any;
+    }, 600);
+  }
+
+  // src/features/speed.js
+  var STEPS = SCHEMA.find((s) => s.key === "speed").options.map((o) => o.value);
+  var CSS3 = `
+  .tkp-speed-val { min-width: 44px; text-align: center; cursor: pointer; font-weight: 700; }
+  .tkp-speed-val.tkp-fast { color: #25f4ee; }
 `;
   function startSpeed() {
     let applying = false;
@@ -574,11 +666,10 @@
         e.preventDefault();
       }
     }, true);
-    addStyle("tkp-speed-css", CSS2);
+    addStyle("tkp-speed-css", CSS3);
+    const g = dockGroup(10, () => get("speedPill"));
     const val = h("span", { class: "tkp-speed-val", title: "Back to 1x", onclick: () => set("speed", 1) });
-    const pill = h(
-      "div",
-      { class: "tkp-speed", hidden: true },
+    g.append(
       h("button", { title: "Slower (Shift+,)", onclick: () => step(-1) }, "−"),
       val,
       h("button", { title: "Faster (Shift+.)", onclick: () => step(1) }, "+")
@@ -589,19 +680,10 @@
     };
     render();
     on("speed", render);
-    const mount = () => {
-      if (!pill.isConnected && document.body) document.body.appendChild(pill);
-    };
-    setInterval(() => {
-      mount();
-      const onMessages = location.pathname.startsWith("/messages");
-      const hasVideo = [...document.querySelectorAll("video")].some((v) => !v.paused && v.isConnected);
-      pill.hidden = !get("speedPill") || onMessages || !hasVideo;
-    }, 700);
   }
 
   // src/features/dmLag.js
-  var CSS3 = `[data-tkp-cv] { content-visibility: auto; }`;
+  var CSS4 = `[data-tkp-cv] { content-visibility: auto; }`;
   var KEEP_NEWEST = 30;
   function tagOld() {
     const items = document.querySelectorAll('[data-e2e="dm-new-chat-item"]');
@@ -625,7 +707,7 @@
     let timer = null;
     const sync = () => {
       if (get("dmLagFix")) {
-        addStyle("tkp-dmlag-css", CSS3);
+        addStyle("tkp-dmlag-css", CSS4);
         if (!timer) timer = setInterval(tagOld, 2e3);
         tagOld();
       } else {
@@ -655,7 +737,7 @@
     return `:root { --tkp-a: ${ac.a}; --tkp-b: ${ac.b}; --tkp-me: ${ac.me};
     --tkp-them: #2a2a31; --tkp-them-text: #f1f1f3; --tkp-r: 20px; --tkp-r-tight: 6px; }`;
   }
-  var CSS4 = `
+  var CSS5 = `
 /* ---------- bubbles ---------- */
 ${ITEM} ${TEXT} {
   padding: 9px 14px !important; border-radius: var(--tkp-r) !important; font-size: 15px !important;
@@ -806,7 +888,7 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
     const sync = () => {
       if (get("appLook")) {
         addStyle("tkp-look-vars", vars());
-        addStyle("tkp-look-css", CSS4);
+        addStyle("tkp-look-css", CSS5);
         if (!obs) {
           obs = new MutationObserver(queue);
           obs.observe(document.documentElement, { childList: true, subtree: true });
@@ -830,9 +912,322 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
     });
   }
 
+  // src/features/pip.js
+  async function toggle() {
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+        return;
+      }
+      const v = activeVideo();
+      if (!v) return;
+      v.removeAttribute("disablepictureinpicture");
+      v.disablePictureInPicture = false;
+      await v.requestPictureInPicture();
+    } catch (e) {
+      toast("Picture-in-picture didn't start: " + (e && e.message ? e.message : "blocked by the browser"));
+    }
+  }
+  function startPip() {
+    if (!document.pictureInPictureEnabled) return;
+    const g = dockGroup(20, () => get("pip"));
+    const btn = h("button", { title: "Picture-in-picture (Shift+P)", onclick: toggle }, "⧉");
+    g.append(btn);
+    const sync = () => btn.classList.toggle("tkp-on", !!document.pictureInPictureElement);
+    document.addEventListener("enterpictureinpicture", sync, true);
+    document.addEventListener("leavepictureinpicture", sync, true);
+    document.addEventListener("keydown", (e) => {
+      if (!get("pip") || isTyping(e) || e.ctrlKey || e.altKey || e.metaKey) return;
+      if (e.key === "P" && e.shiftKey) {
+        e.preventDefault();
+        toggle();
+      }
+    }, true);
+    document.addEventListener("visibilitychange", () => {
+      if (!get("pip") || !get("pipAuto")) return;
+      if (document.visibilityState === "hidden" && !document.pictureInPictureElement) {
+        const v = activeVideo();
+        if (v && !v.paused) {
+          v.removeAttribute("disablepictureinpicture");
+          v.requestPictureInPicture().catch(() => {
+          });
+        }
+      }
+    });
+    try {
+      navigator.mediaSession.setActionHandler("enterpictureinpicture", async () => {
+        if (!get("pip") || !get("pipAuto")) return;
+        const v = activeVideo();
+        if (v) {
+          v.removeAttribute("disablepictureinpicture");
+          await v.requestPictureInPicture();
+        }
+      });
+    } catch (e) {
+    }
+    on("pip", sync);
+  }
+
+  // src/features/audioFx.js
+  var BANDS = [32, 64, 125, 250, 500, 1e3, 2e3, 4e3, 8e3, 16e3];
+  var EQ_PRESETS = {
+    off: { label: "Off", g: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+    bass: { label: "Bass boost", g: [7, 6, 4, 2, 0, 0, 0, 0, 0, 0] },
+    vocal: { label: "Vocals", g: [-3, -2, -1, 0, 2, 3, 3, 2, 0, -1] },
+    treble: { label: "Treble", g: [0, 0, 0, 0, 0, 1, 2, 4, 5, 6] },
+    loud: { label: "Loudness (smile)", g: [5, 4, 1, 0, -1, 0, 1, 3, 4, 4] },
+    club: { label: "Club", g: [3, 5, 4, 1, 0, 0, 1, 2, 3, 2] },
+    podcast: { label: "Speech clarity", g: [-6, -4, -2, 0, 2, 4, 4, 3, 1, -2] }
+  };
+  var chains = /* @__PURE__ */ new Set();
+  var byElement = /* @__PURE__ */ new WeakMap();
+  var ownCtx = null;
+  var anyFx = () => get("eqPreset") && get("eqPreset") !== "off" || get("normalize") || get("audio8d");
+  function makeChain(ctx) {
+    const input = ctx.createGain();
+    const filters = BANDS.map((f, i) => {
+      const b = ctx.createBiquadFilter();
+      b.type = i === 0 ? "lowshelf" : i === BANDS.length - 1 ? "highshelf" : "peaking";
+      b.frequency.value = f;
+      b.Q.value = 1.1;
+      b.gain.value = 0;
+      return b;
+    });
+    const comp = ctx.createDynamicsCompressor();
+    const makeup = ctx.createGain();
+    const pan = ctx.createStereoPanner();
+    const lfo = ctx.createOscillator();
+    const lfoDepth = ctx.createGain();
+    lfo.frequency.value = 0.11;
+    lfoDepth.gain.value = 0;
+    lfo.connect(lfoDepth);
+    lfoDepth.connect(pan.pan);
+    try {
+      lfo.start();
+    } catch (e) {
+    }
+    let node = input;
+    for (const f of filters) {
+      node.connect(f);
+      node = f;
+    }
+    node.connect(comp);
+    comp.connect(makeup);
+    makeup.connect(pan);
+    const chain = { input, output: pan, filters, comp, makeup, lfoDepth };
+    chains.add(chain);
+    applyTo(chain);
+    return chain;
+  }
+  function applyTo(c) {
+    const preset = EQ_PRESETS[get("eqPreset")] || EQ_PRESETS.off;
+    c.filters.forEach((f, i) => {
+      f.gain.value = preset.g[i];
+    });
+    if (get("normalize")) {
+      c.comp.threshold.value = -26;
+      c.comp.knee.value = 18;
+      c.comp.ratio.value = 6;
+      c.comp.attack.value = 4e-3;
+      c.comp.release.value = 0.25;
+      c.makeup.gain.value = 1.5;
+    } else {
+      c.comp.threshold.value = 0;
+      c.comp.knee.value = 0;
+      c.comp.ratio.value = 1;
+      c.makeup.gain.value = 1;
+    }
+    c.lfoDepth.gain.value = get("audio8d") ? 0.85 : 0;
+  }
+  function installAudioHook() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC || !AC.prototype.createMediaElementSource) return;
+    const orig = AC.prototype.createMediaElementSource;
+    AC.prototype.createMediaElementSource = function(el) {
+      const src = orig.call(this, el);
+      try {
+        const chain = makeChain(this);
+        byElement.set(el, chain);
+        const connect = src.connect.bind(src);
+        const disconnect = src.disconnect.bind(src);
+        let wired = false;
+        src.connect = function(dest, ...rest) {
+          if (!wired) {
+            connect(chain.input);
+            wired = true;
+          }
+          return chain.output.connect(dest, ...rest);
+        };
+        src.disconnect = function(...args) {
+          if (!args.length) {
+            try {
+              disconnect();
+            } catch (e) {
+            }
+            wired = false;
+            try {
+              chain.output.disconnect();
+            } catch (e) {
+            }
+            return;
+          }
+          try {
+            chain.output.disconnect(...args);
+          } catch (e) {
+          }
+        };
+      } catch (e) {
+      }
+      return src;
+    };
+  }
+  function routeOwn(v) {
+    if (byElement.has(v) || !anyFx()) return;
+    if (!ownCtx) {
+      try {
+        ownCtx = new (window.AudioContext || window.webkitAudioContext)();
+      } catch (e) {
+        return;
+      }
+    }
+    if (ownCtx.state !== "running") {
+      ownCtx.resume().then(() => routeOwn(v)).catch(() => {
+      });
+      return;
+    }
+    try {
+      const src = ownCtx.createMediaElementSource(v);
+      src.connect(ownCtx.destination);
+    } catch (e) {
+    }
+  }
+  function startAudioFx() {
+    const refresh = () => {
+      for (const c of chains) applyTo(c);
+      for (const v of document.querySelectorAll("video")) if (!v.paused) routeOwn(v);
+    };
+    ["eqPreset", "normalize", "audio8d"].forEach((k) => on(k, refresh));
+    document.addEventListener("play", (e) => {
+      if (e.target instanceof HTMLVideoElement) routeOwn(e.target);
+    }, true);
+    document.addEventListener("pointerdown", () => {
+      if (anyFx() && ownCtx && ownCtx.state !== "running") ownCtx.resume().catch(() => {
+      });
+    }, true);
+    const g = dockGroup(30, () => get("audioDock"));
+    const keys = Object.keys(EQ_PRESETS);
+    const eqBtn = h("button", { title: "Equalizer preset (click to cycle)" });
+    const nBtn = h("button", { title: "Loudness leveling" }, "◍");
+    const dBtn = h("button", { title: "8D audio" }, "8D");
+    const render = () => {
+      const p = get("eqPreset") || "off";
+      eqBtn.textContent = p === "off" ? "EQ" : "EQ·" + (EQ_PRESETS[p] || EQ_PRESETS.off).label.split(" ")[0];
+      eqBtn.classList.toggle("tkp-on", p !== "off");
+      nBtn.classList.toggle("tkp-on", !!get("normalize"));
+      dBtn.classList.toggle("tkp-on", !!get("audio8d"));
+    };
+    eqBtn.addEventListener("click", () => {
+      const i = keys.indexOf(get("eqPreset") || "off");
+      set("eqPreset", keys[(i + 1) % keys.length]);
+    });
+    nBtn.addEventListener("click", () => set("normalize", !get("normalize")));
+    dBtn.addEventListener("click", () => set("audio8d", !get("audio8d")));
+    g.append(h("span", { class: "tkp-sep" }), eqBtn, nBtn, dBtn);
+    ["eqPreset", "normalize", "audio8d"].forEach((k) => on(k, render));
+    render();
+  }
+
+  // src/features/autoScroll.js
+  function goNext() {
+    const next = document.querySelector('[data-e2e="feed-navigation-next"]');
+    if (next && !next.disabled) {
+      next.click();
+      return true;
+    }
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", code: "ArrowDown", keyCode: 40, bubbles: true }));
+    return false;
+  }
+  function startAutoScroll() {
+    document.addEventListener("ended", (e) => {
+      const v = e.target;
+      if (!(v instanceof HTMLVideoElement) || !get("autoScroll") || !onFeedPage()) return;
+      if (v !== activeVideo() && activeVideo()) return;
+      setTimeout(goNext, 250);
+    }, true);
+  }
+
+  // src/features/feedClean.js
+  var CLEAN = `
+  [data-e2e="top-right-action-bar-get-coin"], [data-e2e="copyright"],
+  [data-e2e="nav-short-drama"], [data-e2e="nav-shop"] { display: none !important; }
+  [data-e2e="following-accounts"], [data-e2e="following-see-all"] { display: none !important; }
+`;
+  var ULTRA = CLEAN + `
+  [data-e2e="nav-live"], [data-e2e="nav-activity"], [data-e2e="top-right-action-bar-get-coin"] { display: none !important; }
+  [data-e2e="recommend-list-item-container"] [class*="DivMediaCardOverlayBottom"] { opacity: 0; transition: opacity .2s; }
+  [data-e2e="recommend-list-item-container"]:hover [class*="DivMediaCardOverlayBottom"] { opacity: 1; }
+  [data-e2e="recommend-list-item-container"] [class*="DivMediaCardOverlayTop"] { opacity: 0; }
+  [data-e2e="recommend-list-item-container"]:hover [class*="DivMediaCardOverlayTop"] { opacity: 1; }
+  [data-e2e="recommend-list-item-container"] * { transition-duration: 0s !important; }
+`;
+  var BLUR = `
+  [data-e2e^="comment-level"] p, [data-e2e="comment-text"], [data-e2e^="comment-level"] [data-e2e="comment-level-1"] {
+    filter: blur(6px); transition: filter .15s; }
+  [data-e2e^="comment-level"]:hover p, [data-e2e^="comment-level"]:hover [data-e2e="comment-text"] { filter: none; }
+`;
+  var FILTERED = `
+  [data-tkp-filtered] [class*="DivBasicPlayerWrapper"] { filter: blur(24px) brightness(.5); }
+  [data-tkp-filtered]::after { content: attr(data-tkp-filtered); position: absolute; left: 50%; top: 40%;
+    transform: translateX(-50%); z-index: 5; padding: 8px 14px; border-radius: 10px; background: rgba(0,0,0,.7);
+    color: #fff; font: 600 13px system-ui, sans-serif; pointer-events: none; }
+  [data-tkp-filtered] { position: relative; }
+`;
+  function words() {
+    return String(get("keywordFilter") || "").split(/[,\n]/).map((s) => s.trim().toLowerCase()).filter(Boolean);
+  }
+  function itemText(item) {
+    const parts = [];
+    for (const sel of ['[data-e2e="video-desc"]', '[data-e2e="video-music"]', '[data-e2e="video-author-uniqueid"]', '[data-e2e="video-author-avatar"]']) {
+      const el = item.querySelector(sel);
+      if (el) parts.push(el.textContent, el.getAttribute("href") || "", el.getAttribute("aria-label") || "");
+    }
+    return parts.join(" ").toLowerCase();
+  }
+  function startFeedClean() {
+    const sync = () => {
+      const mode = get("cleanMode");
+      if (mode === "ultra") addStyle("tkp-clean-css", ULTRA);
+      else if (mode === "clean") addStyle("tkp-clean-css", CLEAN);
+      else removeStyle("tkp-clean-css");
+      if (get("commentBlur")) addStyle("tkp-blur-css", BLUR);
+      else removeStyle("tkp-blur-css");
+    };
+    sync();
+    on("cleanMode", sync);
+    on("commentBlur", sync);
+    addStyle("tkp-filter-css", FILTERED);
+    let lastSkipped = null;
+    setInterval(() => {
+      const list = words();
+      const items = document.querySelectorAll('[data-e2e="recommend-list-item-container"]');
+      for (const item2 of items) {
+        const hit = list.length ? list.find((w) => itemText(item2).includes(w)) : null;
+        if (hit) item2.setAttribute("data-tkp-filtered", "Filtered: " + hit);
+        else if (item2.hasAttribute("data-tkp-filtered")) item2.removeAttribute("data-tkp-filtered");
+      }
+      if (!list.length || !onFeedPage()) return;
+      const v = activeVideo();
+      const item = v && v.closest('[data-e2e="recommend-list-item-container"]');
+      if (item && item.hasAttribute("data-tkp-filtered") && item !== lastSkipped) {
+        lastSkipped = item;
+        if (get("keywordSkip")) goNext();
+      }
+    }, 700);
+  }
+
   // src/ui/panel.js
-  var VERSION = true ? "2.1.1" : "";
-  var CSS5 = `
+  var VERSION = true ? "2.2.0" : "";
+  var CSS6 = `
   .tkp-gear { position: fixed; z-index: 2147483001; left: 14px; bottom: 14px; width: 40px; height: 40px;
     border-radius: 50%; border: 1px solid rgba(255,255,255,.14); cursor: pointer;
     background: linear-gradient(135deg, rgba(254,44,85,.9), rgba(37,244,238,.75));
@@ -867,6 +1262,7 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
   .tkp-switch input:checked + span::after { transform: translateX(18px); }
   .tkp-panel select { background: #22222a; color: #fff; border: 1px solid rgba(255,255,255,.15);
     border-radius: 8px; padding: 6px 8px; font: inherit; }
+  .tkp-text { width: 170px; background: #22222a; color: #fff; border: 1px solid rgba(255,255,255,.15); border-radius: 8px; padding: 6px 8px; font: inherit; resize: vertical; }
   .tkp-btn { all: unset; cursor: pointer; padding: 8px 14px; border-radius: 10px; background: #26262e;
     font-weight: 600; font-size: 13px; }
   .tkp-btn:hover { background: #30303a; }
@@ -898,6 +1294,17 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
         sel.value = String(v);
       });
       control = sel;
+    } else if (s.type === "text") {
+      const ta = h("textarea", { rows: 2, placeholder: "word, another word", class: "tkp-text" });
+      ta.value = get(s.key) || "";
+      ta.addEventListener("change", () => {
+        set(s.key, ta.value);
+      });
+      ta.addEventListener("keydown", (e) => e.stopPropagation());
+      on(s.key, (v) => {
+        if (document.activeElement !== ta) ta.value = v || "";
+      });
+      control = ta;
     }
     const note = h("div", { class: "tkp-reload", hidden: true }, "Reload TikTok to apply");
     const el = h(
@@ -924,10 +1331,10 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
     const needsReload = (s) => {
       if (s.reload && rows.get(s.key)) rows.get(s.key).__note.hidden = false;
     };
-    const groups = [];
+    const groups2 = [];
     for (const s of SCHEMA) {
-      let g = groups.find((x) => x.name === s.group);
-      if (!g) groups.push(g = { name: s.group, items: [] });
+      let g = groups2.find((x) => x.name === s.group);
+      if (!g) groups2.push(g = { name: s.group, items: [] });
       g.items.push(s);
     }
     const close = () => {
@@ -959,7 +1366,7 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
         h("small", null, VERSION ? "v" + VERSION : ""),
         h("button", { class: "tkp-btn", onclick: close }, "Done")
       ),
-      groups.map((g) => h(
+      groups2.map((g) => h(
         "div",
         { class: "tkp-group" },
         h("h4", null, g.name),
@@ -998,7 +1405,7 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
     document.body.appendChild(overlay);
   }
   function startPanel() {
-    addStyle("tkp-panel-css", CSS5);
+    addStyle("tkp-panel-css", CSS6);
     const gear = h("button", { class: "tkp-gear", title: "TikTok Plus settings", "aria-label": "TikTok Plus settings", onclick: openPanel }, "⚙");
     const mount = () => {
       if (document.body && !gear.isConnected) document.body.appendChild(gear);
@@ -1009,11 +1416,12 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
 
   // src/main.js
   if (!window.__tkPlus) {
-    window.__tkPlus = { version: true ? "2.1.1" : "" };
+    window.__tkPlus = { version: true ? "2.2.0" : "" };
     window.__tkDmSyncGuard12 = window.__tkDmSyncGuard13 = window.__tkDmSyncGuard14 = true;
     safe("flags", installFlags);
     safe("codecSwap", installCodecSwap);
     safe("backgroundPlay", installBackgroundPlay);
+    safe("audioHook", installAudioHook);
     safe("watchdog", startWatchdog);
     onReady(() => {
       safe("composer", startComposer);
@@ -1021,6 +1429,10 @@ ${ITEM} [data-e2e="dm-new-reaction-display"] { background: #1f1f25 !important; b
       safe("speed", startSpeed);
       safe("dmLag", startDmLag);
       safe("look", startLook);
+      safe("pip", startPip);
+      safe("audioFx", startAudioFx);
+      safe("autoScroll", startAutoScroll);
+      safe("feedClean", startFeedClean);
       safe("panel", startPanel);
     });
   }

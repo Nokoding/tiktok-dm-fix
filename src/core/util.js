@@ -70,3 +70,40 @@ export function isTyping(e) {
   if (!t || !t.tagName) return false;
   return t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName);
 }
+
+// The video you're watching: the playing one with the most area on screen, else the most visible one.
+export function activeVideo() {
+  let best = null, bestScore = -1;
+  for (const v of document.querySelectorAll('video')) {
+    if (!v.isConnected) continue;
+    const r = v.getBoundingClientRect();
+    const w = Math.max(0, Math.min(r.right, innerWidth) - Math.max(r.left, 0));
+    const hh = Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0));
+    const score = w * hh + (v.paused ? 0 : 1e9);
+    if (w * hh > 0 && score > bestScore) { best = v; bestScore = score; }
+  }
+  return best;
+}
+
+export function onFeedPage() {
+  const p = location.pathname;
+  return p === '/' || p.startsWith('/foryou') || p.startsWith('/following') || p.startsWith('/friends') || p.startsWith('/explore');
+}
+
+export function toast(text, ms = 2600) {
+  addStyle('tkp-toast-css', `.tkp-toast { position: fixed; z-index: 2147483004; left: 50%; bottom: 84px;
+    transform: translateX(-50%); background: rgba(24,24,30,.96); color: #fff; padding: 10px 16px;
+    border-radius: 12px; font: 13.5px/1.35 system-ui, sans-serif; border: 1px solid rgba(255,255,255,.1);
+    box-shadow: 0 10px 30px rgba(0,0,0,.45); max-width: min(420px, 90vw); text-align: center; }`);
+  const el = h('div', { class: 'tkp-toast', role: 'status' }, text);
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), ms);
+}
+
+// Separate localStorage slot for lists and per-chat data (settings stay small).
+export function loadData(key, def) {
+  try { const raw = localStorage.getItem('tkplus:data:' + key); return raw ? JSON.parse(raw) : def; } catch (e) { return def; }
+}
+export function saveData(key, val) {
+  try { localStorage.setItem('tkplus:data:' + key, JSON.stringify(val)); return true; } catch (e) { return false; }
+}

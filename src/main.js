@@ -9,6 +9,10 @@ import { startWatchdog } from './features/audioWatchdog.js';
 import { startSpeed } from './features/speed.js';
 import { startDmLag } from './features/dmLag.js';
 import { startLook } from './features/look.js';
+import { startPip } from './features/pip.js';
+import { startAudioFx, installAudioHook } from './features/audioFx.js';
+import { startAutoScroll } from './features/autoScroll.js';
+import { startFeedClean } from './features/feedClean.js';
 import { startPanel } from './ui/panel.js';
 
 if (!window.__tkPlus) {
@@ -19,6 +23,7 @@ if (!window.__tkPlus) {
   safe('flags', installFlags);
   safe('codecSwap', installCodecSwap);
   safe('backgroundPlay', installBackgroundPlay);
+  safe('audioHook', installAudioHook);
 
   // Media events are caught from the start, so no early video slips past.
   safe('watchdog', startWatchdog);
@@ -29,6 +34,10 @@ if (!window.__tkPlus) {
     safe('speed', startSpeed);
     safe('dmLag', startDmLag);
     safe('look', startLook);
+    safe('pip', startPip);
+    safe('audioFx', startAudioFx);
+    safe('autoScroll', startAutoScroll);
+    safe('feedClean', startFeedClean);
     safe('panel', startPanel);
   });
 }
