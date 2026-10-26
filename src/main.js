@@ -8,6 +8,7 @@ import { startComposer } from './features/composer.js';
 import { startWatchdog } from './features/audioWatchdog.js';
 import { startSpeed } from './features/speed.js';
 import { startDmLag } from './features/dmLag.js';
+import { startLook } from './features/look.js';
 import { startPanel } from './ui/panel.js';
 
 if (!window.__tkPlus) {
@@ -27,6 +28,7 @@ if (!window.__tkPlus) {
     safe('autoPause', startAutoPause);
     safe('speed', startSpeed);
     safe('dmLag', startDmLag);
+    safe('look', startLook);
     safe('panel', startPanel);
   });
 }

@@ -7,6 +7,9 @@ export const SCHEMA = [
   { group: 'Messages', key: 'composer', label: 'Fixed message box', desc: 'Native text box: Enter sends, no lost letters, no ghost text.', type: 'toggle', def: true, reload: true },
   { group: 'Messages', key: 'unlockMedia', label: 'Photos and videos in DMs', desc: "Turns on TikTok's own photo and video sending.", type: 'toggle', def: true, reload: true },
   { group: 'Messages', key: 'unlockGroups', label: 'Group chats', desc: "Turns on TikTok's own group chats on web.", type: 'toggle', def: true, reload: true },
+  { group: 'Look', key: 'appLook', label: 'App-style look', desc: 'Gradient bubbles that group like the app, pill message box, livelier inbox.', type: 'toggle', def: true },
+  { group: 'Look', key: 'accent', label: 'Accent color', desc: 'Your bubbles, the send button and highlights.', type: 'select', def: 'tiktok',
+    options: [['tiktok', 'TikTok (pink and cyan)'], ['neon', 'Neon (purple and pink)'], ['ocean', 'Ocean (blue)'], ['sunset', 'Sunset (orange)'], ['mint', 'Mint (green)'], ['classic', 'Classic TikTok blue']].map(([value, label]) => ({ value, label })) },
   { group: 'Messages', key: 'dmLagFix', label: 'Long chat lag fix', desc: 'Off-screen messages stop costing anything while you type.', type: 'toggle', def: true },
 
   { group: 'Playback', key: 'audioWatchdog', label: 'Double audio fix', desc: 'Only one video plays sound. Hidden and off-screen videos get paused.', type: 'toggle', def: true },
