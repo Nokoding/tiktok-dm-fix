@@ -2,7 +2,7 @@
 // @name         TikTok Plus
 // @namespace    nokoding
 // @version      2.0.0
-// @description  Makes TikTok web as good as the app: fixed DM box, photos, videos and group chats in DMs, app-style look, playback and audio tools, and more. Settings live behind the gear button.
+// @description  Makes TikTok web better: fixed DM box (Enter sends, no lost letters), photos, videos and group chats in DMs, double audio fix, speed control, background play and more. Settings behind the gear button.
 // @match        https://www.tiktok.com/*
 // @run-at       document-start
 // @grant        none
@@ -591,12 +591,40 @@
   }
 
   // src/features/dmLag.js
-  var CSS3 = `
-  [data-e2e="dm-new-chat-item"] { content-visibility: auto; contain-intrinsic-size: auto 72px; }
-  [data-e2e="dm-new-conversation-item"] { content-visibility: auto; contain-intrinsic-size: auto 72px; }
-`;
+  var CSS3 = `[data-tkp-cv] { content-visibility: auto; }`;
+  var KEEP_NEWEST = 30;
+  function tagOld() {
+    const items = document.querySelectorAll('[data-e2e="dm-new-chat-item"]');
+    const stop = items.length - KEEP_NEWEST;
+    for (let i = 0; i < stop; i++) {
+      const el = items[i];
+      if (el.hasAttribute("data-tkp-cv")) continue;
+      const hgt = el.getBoundingClientRect().height;
+      if (!hgt) continue;
+      el.style.containIntrinsicSize = `auto ${Math.round(hgt)}px`;
+      el.setAttribute("data-tkp-cv", "");
+    }
+  }
+  function untagAll() {
+    document.querySelectorAll("[data-tkp-cv]").forEach((el) => {
+      el.removeAttribute("data-tkp-cv");
+      el.style.containIntrinsicSize = "";
+    });
+  }
   function startDmLag() {
-    const sync = () => get("dmLagFix") ? addStyle("tkp-dmlag-css", CSS3) : removeStyle("tkp-dmlag-css");
+    let timer = null;
+    const sync = () => {
+      if (get("dmLagFix")) {
+        addStyle("tkp-dmlag-css", CSS3);
+        if (!timer) timer = setInterval(tagOld, 2e3);
+        tagOld();
+      } else {
+        removeStyle("tkp-dmlag-css");
+        clearInterval(timer);
+        timer = null;
+        untagAll();
+      }
+    };
     sync();
     on("dmLagFix", sync);
   }

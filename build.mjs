@@ -10,7 +10,7 @@ const header = `// ==UserScript==
 // @name         TikTok Plus
 // @namespace    nokoding
 // @version      ${pkg.version}
-// @description  Makes TikTok web as good as the app: fixed DM box, photos, videos and group chats in DMs, app-style look, playback and audio tools, and more. Settings live behind the gear button.
+// @description  Makes TikTok web better: fixed DM box (Enter sends, no lost letters), photos, videos and group chats in DMs, double audio fix, speed control, background play and more. Settings behind the gear button.
 // @match        https://www.tiktok.com/*
 // @run-at       document-start
 // @grant        none
